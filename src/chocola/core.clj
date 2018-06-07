@@ -1,6 +1,7 @@
 (ns chocola.core)
 
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
+(alter-var-root (find-var 'clojure.core/future-call)
+  (fn [original-future-call]
+    (fn [f]
+      (println "I'M HERE")
+      (original-future-call f))))
