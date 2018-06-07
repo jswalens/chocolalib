@@ -2,12 +2,7 @@
 
 ; ACTORS
 
-; FIXME
-; (def
-;   ^{:added "1.0-chocola"
-;     :doc "The actor currently running on this thread, else nil."
-;     :tag clojure.lang.Actor} ; XXX not sure how to do this
-;   'clojure.core/*actor* nil)
+(alter-meta! #'*actor* assoc :added "1.0-chocola")
 
 (alter-var-root (find-var 'clojure.core/send)
   (fn [send-original]
@@ -29,6 +24,8 @@
           receiver (first args) (rest args))))))
 
 (alter-meta! #'clojure.core/send assoc :added "1.0-chocola")
+
+; TODO instead of def'ing here, they should be in clojure.core
 
 (defmacro behavior
   "Create behavior. A behavior consists of parameters to the behavior,
