@@ -22,10 +22,13 @@ import java.util.concurrent.LinkedBlockingDeque;
 public class Actor implements Runnable {
 
     // Var *actor*. Normally this would appear in clojure.lang.RT.
-    final static public Var ACTOR = Var.intern(RT.CLOJURE_NS, Symbol.intern("*actor*"), null).setDynamic();
+    final static public Var BEHAVIOR_VAR = Var.intern(RT.CLOJURE_NS, Symbol.intern("behavior"), null).setDynamic();
+    final static public Var SPAWN_VAR = Var.intern(RT.CLOJURE_NS, Symbol.intern("spawn"), null).setDynamic();
+    final static public Var BECOME_VAR = Var.intern(RT.CLOJURE_NS, Symbol.intern("become"), null).setDynamic();
+    final static public Var ACTOR_VAR = Var.intern(RT.CLOJURE_NS, Symbol.intern("*actor*"), null).setDynamic();
     static {
-        ACTOR.setMeta(RT.map(RT.DOC_KEY, "The actor currently running on this thread, else nil"));
-        ACTOR.setTag(Symbol.intern("clojure.lang.Actor"));
+        ACTOR_VAR.setMeta(RT.map(RT.DOC_KEY, "The actor currently running on this thread, else nil"));
+        ACTOR_VAR.setTag(Symbol.intern("clojure.lang.Actor"));
     }
 
     private static class AbortEx extends Error{
@@ -179,7 +182,7 @@ public class Actor implements Runnable {
 
         // Create bindings map that binds *actor* to this. Used below.
         Map<Var, Object> m = new HashMap<Var, Object>();
-        m.put(ACTOR, this);
+        m.put(ACTOR_VAR, this);
         IPersistentMap bindings = PersistentArrayMap.create(m);
 
         try {

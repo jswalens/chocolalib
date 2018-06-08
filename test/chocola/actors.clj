@@ -1,6 +1,6 @@
 (ns chocola.actors
   (:require [clojure.test :refer :all]
-            [chocola.core :refer :all])) ; TODO import automatically
+            [chocola.core]))
 
 (deftest simple
   (let [p (promise)

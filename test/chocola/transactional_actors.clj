@@ -1,6 +1,6 @@
 (ns chocola.transactional-actors
   (:require [clojure.test :refer :all]
-            [chocola.core :refer :all])) ; XXX
+            [chocola.core]))
 
 ;(def logger (agent nil))
 (defn log [& args]
