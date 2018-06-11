@@ -6,6 +6,8 @@
 
   :dependencies [[org.clojure/clojure "1.8.0"]]
 
+  :injections [(require 'chocola.core)]
+
   ; Documentation about mixing Clojure and Java in a Leiningen project at
   ; https://github.com/technomancy/leiningen/blob/master/doc/MIXED_PROJECTS.md
   :source-paths ["src/clj"]
