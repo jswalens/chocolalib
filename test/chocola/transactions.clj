@@ -156,11 +156,11 @@
   (println "no thread calls ensure: wrong")
   (println "write skews detected: "
     (count (filter true? (repeatedly 5000 #(write-skew-experiment identity identity))))
-    " (expect >1)")
+    " (expect >0)")
   (println "some threads call ensure: still wrong")
   (println "write skews detected: "
     (count (filter true? (repeatedly 5000 #(write-skew-experiment ensure identity))))
-    " (expect >1)")
+    " (expect >0)")
   (println "all threads call ensure: correct")
   (let [n (count (filter true? (repeatedly 1000 #(write-skew-experiment ensure ensure))))]
     (println "write skews detected: " n " (expect 0)")
@@ -203,14 +203,15 @@
   (let [res (time (test-commutes 10 10 10000 alter))]
     (assert (= (count (:result res)) 10))
     (assert (every? (fn [r] (= r 550000)) (:result res)))
-    (println "num retries using alter: " (:retries res))))
+    (println "num retries using alter: " (:retries res) " (expect >0)")))
 
 (deftest test-commute
   ; using commute
   (let [res (time (test-commutes 10 10 10000 commute))]
     (assert (= (count (:result res)) 10))
     (assert (every? (fn [r] (= r 550000)) (:result res)))
-    (println "num retries using commute: " (:retries res))))
+    (println "num retries using commute: " (:retries res)" (expect 0)")
+    (is (= (:retries res) 0))))
 
 ;; = COMMUTE AFTER ALTER =
 
@@ -234,7 +235,7 @@
       (is (= 2 (deref r))))
     (is (= 2 (deref r)))))
 
-(deftest test-alter
+(deftest test-alter-2
   (let [r (ref 0)]
     (dosync
       (is (= 0 (deref r)))
