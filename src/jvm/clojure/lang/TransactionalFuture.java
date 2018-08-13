@@ -167,7 +167,7 @@ public class TransactionalFuture implements Callable, Future {
 
     // Execute future (in this thread), and wait for all sub-futures to finish.
     // This will throw an ExecutionException if an inner future threw an
-    // exception (e.g. StoppedEx or RetryEx).
+    // exception (including StoppedEx or RetryEx).
     public Object callAndWait() throws Exception {
         if(!tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();

@@ -106,12 +106,3 @@
           (when (:resolve opts)
             (.setResolve r (:resolve opts)))
           r)))))
-
-; (alter-var-root #'clojure.core/io!
-;   (fn [_original]
-;     (fn [& body]
-;       (let [message (when (string? (first body)) (first body))
-;             body (if message (next body) body)]
-;         `(if (clojure.lang.TransactionalFuture/isCurrent)
-;           (throw (new IllegalStateException ~(or message "I/O in transaction")))
-;           (do ~@body))))))

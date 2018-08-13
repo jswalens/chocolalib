@@ -152,6 +152,14 @@ public class LockingTransaction {
         return info != null && info.running();
     }
 
+    // Returns true if we're in a transaction. Note that they transaction may
+    // have been killed, so it is not necessarily running. This function is only
+    // provided for compatibility with existing Clojure, which uses it in the
+    // definition of io!. Don't use it because its name is confusing.
+    public static boolean isRunning() {
+        return TransactionalFuture.isCurrent();
+    }
+
     // Try to "barge" the other transaction: if this transaction is older, and
     // we've been waiting for at least BARGE_WAIT_NANOS (10 ms), kill the other
     // one.
@@ -230,15 +238,26 @@ public class LockingTransaction {
                 result = f_main.callAndWait();
                 Actor.abortIfDependencyAborted();
                 finished = true;
-            } catch (ExecutionException ex) {
-                // exception in embedded future => retry
-                // XXX should we check whether the cause was a StoppedEx or
-                // RetryEx? And what if the cause was another ExecutionException
-                // wrapping one of these?
             } catch (StoppedEx ex) {
                 // eat this, finished will stay false, and we'll retry
             } catch (RetryEx ex) {
                 // eat this, finished will stay false, and we'll retry
+            } catch (ExecutionException ex) {
+                // exception in embedded future
+                // If the cause or any deeper cause is StoppedEx or RetryEx:
+                // ignore, like above. Otherwise, re-throw ExecutionException
+                // (it is up to the user to deal with it).
+                Throwable cause = ex.getCause();
+                while (cause instanceof ExecutionException) {
+                    cause = cause.getCause();
+                }
+                if (cause instanceof StoppedEx) {
+                    // eat this
+                } else if (cause instanceof RetryEx) {
+                    // eat this
+                } else {
+                    throw ex; // throw original ExecutionException, not cause
+                }
             } finally {
                 if (!finished) {
                     stop(RETRY);
