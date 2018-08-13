@@ -12,11 +12,12 @@
   (fn [send-original]
     (fn [receiver & args]
       (if (instance? clojure.lang.Actor receiver)
+        ; message to actor
         (do
           (. clojure.lang.Actor doEnqueue receiver args)
           receiver)
-        (apply send-via clojure.lang.Agent/pooledExecutor
-          receiver (first args) (rest args))))))
+        ; message to agent
+        (apply send-original receiver args)))))
 
 (alter-meta! #'clojure.core/send assoc :added "1.0-chocola")
 (alter-meta! #'clojure.core/send assoc :doc

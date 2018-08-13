@@ -155,9 +155,22 @@ public class LockingTransaction {
     // Returns true if we're in a transaction. Note that they transaction may
     // have been killed, so it is not necessarily running. This function is only
     // provided for compatibility with existing Clojure, which uses it in the
-    // definition of io!. Don't use it because its name is confusing.
+    // definition of io!. Don't use it because its name is confusing; use
+    // TransactionalFuture.isCurrent() instead.
     public static boolean isRunning() {
         return TransactionalFuture.isCurrent();
+    }
+
+    // Get the transaction we're in. Note that they transaction may
+    // have been killed, so it is not necessarily running. This function is only
+    // provided for compatibility with existing Clojure, which uses it in
+    // clojure.lang.Agent/dispatchAction. Don't use it because its name is
+    // confusing; use TransactionalFuture.getCurrent() instead.
+    public static LockingTransaction getRunning() {
+        TransactionalFuture current = TransactionalFuture.getCurrent();
+        if (current == null)
+            return null;
+        return current.tx;
     }
 
     // Try to "barge" the other transaction: if this transaction is older, and
@@ -269,6 +282,13 @@ public class LockingTransaction {
         if (!committed)
             throw Util.runtimeException("Transaction failed after reaching retry limit");
         return result;
+    }
+
+    // Enqueue a message to an agent.
+    // This is provided for compatibility with Clojure: it is called in
+    // clojure.lang.Agent/dispatchAction.
+    void enqueue(Agent.Action action) {
+        TransactionalFuture.getEx().enqueue(action);
     }
 
 }

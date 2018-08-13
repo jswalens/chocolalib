@@ -3,6 +3,8 @@
             [chocola.core])
   (:import [java.util.concurrent Executors]))
 
+; === io! ===
+
 (def r (ref 0))
 
 (deftest io []
@@ -46,3 +48,33 @@
       (ref-set r 1)
       (future (ref-set r 2) (io! (is false))))))
   (is (= @r 0))) ; threw so no change
+
+; === send to Agent ===
+
+(deftest send-to-agent-out-tx-test []
+  (let [ag      (agent 0)
+        n-iters 100]
+    (dotimes [_i n-iters]
+      (send ag inc))
+    (await ag)
+    (is (= @ag n-iters))))
+
+(deftest send-to-agent-in-tx-test []
+  (let [r         (ref 0)
+        ag        (agent 0)
+        n-threads 100
+        n-iters   100
+        pool      (Executors/newFixedThreadPool n-threads)
+        tasks (map (fn [t]
+                (fn []
+                  (dotimes [_i n-iters]
+                    (dosync
+                      (send ag inc)
+                      (alter r inc)))))
+                (range n-threads))]
+    (doseq [future (.invokeAll pool tasks)]
+      (.get future))
+    (.shutdown pool)
+    (is (= @r (* n-threads n-iters)))
+    (await ag)
+    (is (= @ag (* n-threads n-iters)))))
