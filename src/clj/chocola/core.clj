@@ -1,5 +1,9 @@
 (ns chocola.core)
 
+; Make these private functions from clojure.core available here
+(def deref-future #'clojure.core/deref-future)
+(def binding-conveyor-fn #'clojure.core/binding-conveyor-fn)
+
 ; ACTORS
 
 (alter-meta! #'*actor* assoc :added "1.0-chocola")
@@ -29,7 +33,7 @@
 (alter-var-root #'clojure.core/behavior
   (fn [_original]
     (fn [&form &env behavior-pars message-pars & body]
-      `(#'clojure.core/binding-conveyor-fn
+      `(binding-conveyor-fn
         (fn ~behavior-pars (fn ~message-pars ~@body))))))
 
 (alter-meta! #'clojure.core/behavior assoc :macro true)
@@ -63,10 +67,6 @@
   with the new arguments.")
 
 ; FUTURES
-
-; Make these private functions from clojure.core available here
-(def deref-future #'clojure.core/deref-future)
-(def binding-conveyor-fn #'clojure.core/binding-conveyor-fn)
 
 (alter-var-root #'clojure.core/future-call
   (fn [original-future-call]
