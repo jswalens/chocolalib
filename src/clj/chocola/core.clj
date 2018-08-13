@@ -64,8 +64,30 @@
 
 ; FUTURES
 
-; (alter-var-root #'clojure.core/future-call
-;   (fn [original-future-call]
-;     (fn [f]
-;       (println "I'M HERE")
-;       (original-future-call f))))
+; Make these private functions from clojure.core available here
+(def deref-future #'clojure.core/deref-future)
+(def binding-conveyor-fn #'clojure.core/binding-conveyor-fn)
+
+(alter-var-root #'clojure.core/future-call
+  (fn [original-future-call]
+    (fn [f]
+      (if-not (clojure.lang.TransactionalFuture/isActive)
+        (original-future-call f)
+        (let [f (binding-conveyor-fn  f)
+              fut (clojure.lang.TransactionalFuture/spawnFuture ^Callable f)]
+          (reify
+            clojure.lang.IDeref
+              (deref [_] (deref-future fut))
+            clojure.lang.IBlockingDeref
+              (deref [_ timeout-ms timeout-val]
+                (deref-future fut timeout-ms timeout-val))
+            clojure.lang.IPending
+              (isRealized [_] (.isDone fut))
+            java.util.concurrent.Future
+              (get [_] (.get fut))
+              (get [_ timeout unit] (.get fut timeout unit))
+              (isCancelled [_] (.isCancelled fut))
+              (isDone [_] (.isDone fut))
+              (cancel [_ interrupt?] (.cancel fut interrupt?))))))))
+;(alter-meta! #'clojure.core/future-call assoc :doc "TODO")
+;(alter-meta! #'clojure.core/future assoc :doc "TODO")
