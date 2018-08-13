@@ -91,3 +91,27 @@
               (cancel [_ interrupt?] (.cancel fut interrupt?))))))))
 ;(alter-meta! #'clojure.core/future-call assoc :doc "TODO")
 ;(alter-meta! #'clojure.core/future assoc :doc "TODO")
+
+; TRANSACTIONS
+
+; Extend ref to deal with :resolve option.
+(alter-var-root #'clojure.core/ref
+  (fn [original-ref]
+    (fn
+      ([x]
+        (original-ref x))
+      ([x & options]
+        (let [r (apply original-ref x options)
+              opts (apply hash-map options)]
+          (when (:resolve opts)
+            (.setResolve r (:resolve opts)))
+          r)))))
+
+; (alter-var-root #'clojure.core/io!
+;   (fn [_original]
+;     (fn [& body]
+;       (let [message (when (string? (first body)) (first body))
+;             body (if message (next body) body)]
+;         `(if (clojure.lang.TransactionalFuture/isActive)
+;           (throw (new IllegalStateException ~(or message "I/O in transaction")))
+;           (do ~@body))))))
