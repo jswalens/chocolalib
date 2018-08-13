@@ -232,7 +232,7 @@ public class Ref extends ARef implements IFn, Comparable<Ref>, IRef {
     }
 
     public Object deref() {
-        TransactionalFuture f = TransactionalFuture.getRunning();
+        TransactionalFuture f = TransactionalFuture.getCurrent();
         if (f == null)
             return currentVal();
         return f.doGet(this);

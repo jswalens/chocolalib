@@ -117,7 +117,7 @@ public class LockingTransaction {
                 info.latch.countDown();
             }
             info = null;
-            // From now on, isRunning returns false and all operations on refs
+            // From now on, isNotKilled returns false and all operations on refs
             // (in TransactionalFuture) will throw StoppedEx
         }
         int n_stopped = 0;
@@ -148,7 +148,7 @@ public class LockingTransaction {
         }
     }
 
-    boolean isRunning() {
+    boolean isNotKilled() {
         return info != null && info.running();
     }
 
@@ -194,7 +194,7 @@ public class LockingTransaction {
     // Run fn in a transaction.
     // If we're already in a transaction, use that one, else creates one.
     static public Object runInTransaction(Callable fn) throws Exception {
-        TransactionalFuture f = TransactionalFuture.getRunning();
+        TransactionalFuture f = TransactionalFuture.getCurrent();
         if (f == null) { // No transaction running: create one
             LockingTransaction t = new LockingTransaction();
             return t.run(fn);

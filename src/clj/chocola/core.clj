@@ -71,7 +71,7 @@
 (alter-var-root #'clojure.core/future-call
   (fn [original-future-call]
     (fn [f]
-      (if-not (clojure.lang.TransactionalFuture/isActive)
+      (if-not (clojure.lang.TransactionalFuture/isCurrent)
         (original-future-call f)
         (let [f (binding-conveyor-fn  f)
               fut (clojure.lang.TransactionalFuture/spawnFuture ^Callable f)]
@@ -112,6 +112,6 @@
 ;     (fn [& body]
 ;       (let [message (when (string? (first body)) (first body))
 ;             body (if message (next body) body)]
-;         `(if (clojure.lang.TransactionalFuture/isActive)
+;         `(if (clojure.lang.TransactionalFuture/isCurrent)
 ;           (throw (new IllegalStateException ~(or message "I/O in transaction")))
 ;           (do ~@body))))))

@@ -127,17 +127,17 @@ public class TransactionalFuture implements Callable, Future {
 
 
     // Is this thread in a transactional future?
-    static public boolean isActive() {
-        return getRunning() != null;
+    static public boolean isCurrent() {
+        return getCurrent() != null;
     }
 
     // Get this thread's future (possibly null).
-    static TransactionalFuture getRunning() {
+    static TransactionalFuture getCurrent() {
         return future.get();
     }
 
     // Get this thread's future. Throws exception if no future/transaction is
-    // running.
+    // running in the current thread.
     static TransactionalFuture getEx() {
         TransactionalFuture f = future.get();
         if (f == null) {
@@ -149,7 +149,7 @@ public class TransactionalFuture implements Callable, Future {
 
     // Execute future (in this thread).
     public Object call() throws Exception {
-        if(!tx.isRunning())
+        if(!tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();
 
         TransactionalFuture f = future.get();
@@ -169,7 +169,7 @@ public class TransactionalFuture implements Callable, Future {
     // This will throw an ExecutionException if an inner future threw an
     // exception (e.g. StoppedEx or RetryEx).
     public Object callAndWait() throws Exception {
-        if(!tx.isRunning())
+        if(!tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();
 
         TransactionalFuture f = future.get();
@@ -210,11 +210,11 @@ public class TransactionalFuture implements Callable, Future {
     // Spawn future: outside transaction regular future, in transactional a
     // transactional future.
     static public Future spawnFuture(Callable fn) {
-        TransactionalFuture current = TransactionalFuture.getRunning();
+        TransactionalFuture current = TransactionalFuture.getCurrent();
         if (current == null) { // outside transaction
             return Agent.soloExecutor.submit(fn);
         } else { // inside transaction
-            if (!current.tx.isRunning())
+            if (!current.tx.isNotKilled())
                 throw new LockingTransaction.StoppedEx();
             TransactionalFuture f = new TransactionalFuture(current.tx, current,
                 fn);
@@ -313,7 +313,7 @@ public class TransactionalFuture implements Callable, Future {
 
     // Get
     Object doGet(Ref ref) {
-        if (!tx.isRunning())
+        if (!tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();
         Object val = vals.get(ref);
         if (val == null)
@@ -355,7 +355,7 @@ public class TransactionalFuture implements Callable, Future {
 
     // Set
     Object doSet(Ref ref, Object val) {
-        if (!tx.isRunning())
+        if (!tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();
         if (commutes.containsKey(ref))
             throw new IllegalStateException("Can't set after commute");
@@ -370,7 +370,7 @@ public class TransactionalFuture implements Callable, Future {
 
     // Ensure
     void doEnsure(Ref ref) {
-        if (!tx.isRunning())
+        if (!tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();
         if (ensures.contains(ref))
             return;
@@ -398,7 +398,7 @@ public class TransactionalFuture implements Callable, Future {
 
     // Commute
     Object doCommute(Ref ref, IFn fn, ISeq args) {
-        if (!tx.isRunning())
+        if (!tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();
         Object val = vals.get(ref);
         if (val == null) {

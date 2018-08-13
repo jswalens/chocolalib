@@ -107,7 +107,7 @@ public class Actor implements Runnable {
         behavior = new Behavior(behaviorBody, behaviorArgs);
     }
 
-    static Actor getRunning() {
+    static Actor getCurrent() {
         return CURRENT_ACTOR.get();
     }
 
@@ -131,7 +131,7 @@ public class Actor implements Runnable {
     public static void start(Actor actor) {
         // TODO: what if transaction committed successfully (so dependency committed): now we still add to spawned (2nd
         // case), but we could immediately execute (how does this affect the order?).
-        if (TransactionalFuture.getRunning() != null)
+        if (TransactionalFuture.getCurrent() != null)
             // tx running: keep in tx
             TransactionalFuture.getEx().spawnActor(actor);
         else if (CURRENT_ACTOR.get() != null && CURRENT_ACTOR.get().tentative())
@@ -144,7 +144,7 @@ public class Actor implements Runnable {
 
     public static void doBecome(IFn behaviorBody, ISeq behaviorArgs) {
         Behavior behavior = new Behavior(behaviorBody, behaviorArgs);
-        if (TransactionalFuture.getRunning() != null)
+        if (TransactionalFuture.getCurrent() != null)
             // tx running: only persist become in tx
             TransactionalFuture.getEx().become(behavior);
         else
@@ -162,12 +162,12 @@ public class Actor implements Runnable {
 
     public static void doEnqueue(Actor receiver, ISeq args) throws InterruptedException {
         LockingTransaction.Info dependency = null;
-        if (TransactionalFuture.getRunning() != null)
+        if (TransactionalFuture.getCurrent() != null)
             // tx running: tx = dependency
             dependency = TransactionalFuture.getEx().tx.info;
-        else if (getRunning() != null && getRunning().tentative())
+        else if (getCurrent() != null && getCurrent().tentative())
             // no tx running, but tentative turn: transitive dependency
-            dependency = getRunning().dependency;
+            dependency = getCurrent().dependency;
         // else: no dependency
         Message message = new Message(receiver, args, dependency);
         receiver.enqueue(message);
