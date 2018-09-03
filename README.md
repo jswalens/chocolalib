@@ -4,11 +4,27 @@ Chocola is a Clojure library for concurrent and parallel programming. It provide
 
 More at http://soft.vub.ac.be/~jswalens/chocola
 
+## Getting started
+
+Chocola can easily be used in existing Clojure projects that use Leiningen. In your project's `project.clj`, add the following line:
+
+```clj
+  :injections [(require 'chocola.core)]
+```
+
+This injects the call to include Chocola in your code. Chocola will patch Clojure and modify its internals to use Chocola's semantics.
+
+## To do
+
+This library version of Chocola is still a work in progress. Some things we still plan to do:
+
+* [ ] Add more documentation on how to include Chocola. Check whether everything works as expected.
+* [ ] Add documentation on how to use Chocola, what its semantics are...
+* [ ] Finish a large number of loose ends in the implementation.
+
 ## Publications
 
-We describe (the ideas behind) Chocola in the following publications:
-
-We published about (the ideas behind) Chocola at academic conferences:
+We published about Chocola at the following academic conferences:
 
 * [Transactional Tasks: Parallelism in Software Transactions][ecoop] (ECOOP, July 2016)
 * [Transactional Actors: Communication in Transactions][seps] (SEPS, SPLASH, October 2017)
