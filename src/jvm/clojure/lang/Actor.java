@@ -46,6 +46,23 @@ public class Actor implements Runnable {
             throw Actor.abortex;
     }
 
+    static class Message {
+        final Actor receiver;
+        final ISeq args;
+        final LockingTransaction.Info dependency; // can be null
+
+        public Message(Actor receiver, ISeq args) {
+            this(receiver, args, null);
+        }
+
+        public Message(Actor receiver, ISeq args, LockingTransaction.Info dependency) {
+            this.receiver = receiver;
+            this.args = args;
+            this.dependency = dependency;
+        }
+
+    }
+
     static class Inbox {
         private final LinkedBlockingDeque<Message> q = new LinkedBlockingDeque<Message>();
 
@@ -85,23 +102,6 @@ public class Actor implements Runnable {
     private LockingTransaction.Info dependency = null;
     private List<Actor> spawned = new ArrayList<Actor>();
     private Behavior oldBehavior = null;
-
-    static class Message {
-        final Actor receiver;
-        final ISeq args;
-        final LockingTransaction.Info dependency; // can be null
-
-        public Message(Actor receiver, ISeq args) {
-            this(receiver, args, null);
-        }
-
-        public Message(Actor receiver, ISeq args, LockingTransaction.Info dependency) {
-            this.receiver = receiver;
-            this.args = args;
-            this.dependency = dependency;
-        }
-
-    }
 
     public Actor(IFn behaviorBody, ISeq behaviorArgs) {
         behavior = new Behavior(behaviorBody, behaviorArgs);

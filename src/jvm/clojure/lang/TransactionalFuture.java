@@ -26,23 +26,6 @@ public class TransactionalFuture implements Callable, Future {
         }
     }
 
-
-    // Future running in current thread (can be null)
-    final static ThreadLocal<TransactionalFuture> future = new ThreadLocal<TransactionalFuture>();
-
-
-    // Transaction for this future
-    final LockingTransaction tx;
-
-    // Java Future executing this future.
-    // null if executing in main thread.
-    Future fut = null;
-
-    // Function executed in this future
-    final Callable fn;
-    // Result of future (return value of fn)
-    Object result;
-
     static class Vals<K, V> {
         final Map<K, V> vals = new HashMap<K, V>();
         final Vals<K, V> prev;
@@ -74,6 +57,36 @@ public class TransactionalFuture implements Callable, Future {
             //this.prev = null; // XXX is this ok?
         }
     }
+
+    // Notify watches
+    private static class Notify {
+        final public Ref ref;
+        final public Object oldval;
+        final public Object newval;
+
+        Notify(Ref ref, Object oldval, Object newval) {
+            this.ref = ref;
+            this.oldval = oldval;
+            this.newval = newval;
+        }
+    }
+
+
+    // Future running in current thread (can be null)
+    final static ThreadLocal<TransactionalFuture> future = new ThreadLocal<TransactionalFuture>();
+
+
+    // Transaction for this future
+    final LockingTransaction tx;
+
+    // Java Future executing this future.
+    // null if executing in main thread.
+    Future fut = null;
+
+    // Function executed in this future
+    final Callable fn;
+    // Result of future (return value of fn)
+    Object result;
 
     // In transaction values of refs (written by set or commute)
     // The keys of this map and its prev's = union of sets and commutes.
@@ -500,19 +513,6 @@ public class TransactionalFuture implements Callable, Future {
         merged.addAll(child.merged);
 
         merged.add(child);
-    }
-
-    // Notify watches
-    private static class Notify {
-        final public Ref ref;
-        final public Object oldval;
-        final public Object newval;
-
-        Notify(Ref ref, Object oldval, Object newval) {
-            this.ref = ref;
-            this.oldval = oldval;
-            this.newval = newval;
-        }
     }
 
     // Commit
