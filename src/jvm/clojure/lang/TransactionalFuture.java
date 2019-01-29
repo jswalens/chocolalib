@@ -19,6 +19,8 @@ public class TransactionalFuture implements Callable, Future {
     final static ThreadLocal<TransactionalFuture> future = new ThreadLocal<TransactionalFuture>();
 
 
+    // Child futures.
+    final Set<Future> children = new HashSet<Future>();
     // Transactional context
     TransactionalContext ctx;
 
@@ -39,10 +41,6 @@ public class TransactionalFuture implements Callable, Future {
             this.ctx = new TransactionalContext(tx, parent.ctx);
         else
             this.ctx = new TransactionalContext(tx, null);
-
-        synchronized (tx.futures) {
-            tx.futures.add(this);
-        }
     }
 
 
@@ -101,21 +99,11 @@ public class TransactionalFuture implements Callable, Future {
             result = fn.call();
 
             // Wait for all futures to finish
-            int n_stopped = 0;
-            while (n_stopped != ctx.tx.numberOfFutures()) {
-                Set<TransactionalFuture> fs;
-                synchronized (ctx.tx.futures) {
-                    fs = new HashSet<TransactionalFuture>(ctx.tx.futures);
-                }
-                for (TransactionalFuture f_ : fs) {
-                    if (f_ != this) // Don't merge into self
-                        f_.get();
-                }
-                n_stopped = fs.size();
+            // This is safe to do in this thread, as the current future's body
+            // has finished.
+            for (Future child : children) {
+                child.get();
             }
-            // If in the mean time new futures were created, wait for them
-            // as well. No race condition because number of futures won't
-            // change for sure after last get, and only increases.
         } finally {
             future.remove();
         }
@@ -131,14 +119,20 @@ public class TransactionalFuture implements Callable, Future {
     // transactional future.
     static public Future forkFuture(Callable fn) {
         TransactionalFuture current = TransactionalFuture.getCurrent();
-        if (current == null || current.ctx == null) { // outside transaction
+        if (current == null) { // outside transaction
             return Agent.soloExecutor.submit(fn);
+        } else if (current.ctx == null) {
+            Future child = Agent.soloExecutor.submit(fn);
+            current.children.add(child);
+            return child;
         } else { // inside transaction
             if (!current.ctx.tx.isNotKilled())
                 throw new LockingTransaction.StoppedEx();
-            TransactionalFuture f = new TransactionalFuture(current.ctx.tx, current, fn);
-            f.fork();
-            return f;
+            TransactionalFuture child = new TransactionalFuture(current.ctx.tx,
+                    current, fn);
+            child.fork();
+            current.children.add(child);
+            return child;
         }
     }
 

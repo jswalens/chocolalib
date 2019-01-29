@@ -113,6 +113,7 @@ public class TransactionalContext {
             r.unlockRead();
         }
         ensures.clear();
+        // TODO maybe force children to stop if they're still running
         try {
             if (status == LockingTransaction.COMMITTED) {
                 for (Agent.Action action : actions) {

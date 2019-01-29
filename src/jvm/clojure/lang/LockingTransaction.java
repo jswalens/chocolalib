@@ -93,18 +93,9 @@ public class LockingTransaction {
     long startTime;
     // Time point at which current attempt of transaction started.
     long readPoint;
-    // Futures created in transaction.
-    // Access should be protected using synchronized.
-    final Set<TransactionalFuture> futures = Collections.synchronizedSet(
-            new HashSet<TransactionalFuture>());
+    // Root future
+    TransactionalFuture root;
 
-
-    // Get number of futures, synchronized.
-    int numberOfFutures() {
-        synchronized (futures) {
-            return futures.size();
-        }
-    }
 
     // Indicate transaction as having stopped (with certain state).
     // OK to call twice (idempotent).
@@ -120,32 +111,7 @@ public class LockingTransaction {
             // From now on, isNotKilled returns false and all operations on refs
             // (in TransactionalFuture) will throw StoppedEx
         }
-        int n_stopped = 0;
-        while (n_stopped != numberOfFutures()) {
-            Set<TransactionalFuture> fs;
-            synchronized (futures) {
-                fs = new HashSet<TransactionalFuture>(futures);
-            }
-            for (TransactionalFuture f_ : fs) {
-                f_.stop(status);
-            }
-            for (TransactionalFuture f_ : fs) {
-                try {
-                    f_.get();
-                    // Should stop 'soon' with ExecutionException wrapping
-                    // StoppedEx
-                } catch (Exception e) {
-                }
-            }
-            n_stopped = fs.size();
-        }
-        // If in the mean time new futures were created, stop them as well.
-        // No race conditions because 1) get and stop are idempotent; 2) futures
-        // only grows, never shrinks; 3) after all gets have returned, futures
-        // won't change anymore.
-        synchronized (futures) {
-            futures.clear();
-        }
+        root.stop(status);
     }
 
     boolean isNotKilled() {
@@ -244,11 +210,10 @@ public class LockingTransaction {
             }
             info = new Info(RUNNING, startPoint);
 
-            TransactionalFuture f_main = null;
             boolean finished = false;
             try {
-                f_main = new TransactionalFuture(this, null, fn);
-                result = f_main.callAndWait();
+                root = new TransactionalFuture(this, null, fn);
+                result = root.callAndWait();
                 Actor.abortIfDependencyAborted();
                 finished = true;
             } catch (StoppedEx ex) {
@@ -275,7 +240,7 @@ public class LockingTransaction {
                 if (!finished) {
                     stop(RETRY);
                 } else {
-                    committed = f_main.ctx.commit(this);
+                    committed = root.ctx.commit(this);
                 }
             }
         }
