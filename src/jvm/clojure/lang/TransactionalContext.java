@@ -15,6 +15,19 @@ public class TransactionalContext {
         }
     }
 
+    // Notify watches
+    private static class Notify {
+        final public Ref ref;
+        final public Object oldval;
+        final public Object newval;
+
+        Notify(Ref ref, Object oldval, Object newval) {
+            this.ref = ref;
+            this.oldval = oldval;
+            this.newval = newval;
+        }
+    }
+
     static class Vals<K, V> {
         final Map<K, V> vals = new HashMap<K, V>();
         final Vals<K, V> prev;
@@ -316,7 +329,7 @@ public class TransactionalContext {
     boolean commit(LockingTransaction tx) {
         boolean done = false;
         ArrayList<Ref> locked = new ArrayList<Ref>(); // write locks
-        ArrayList<TransactionalFuture.Notify> notify = new ArrayList<TransactionalFuture.Notify>();
+        ArrayList<Notify> notify = new ArrayList<Notify>();
         try {
             // If no one has killed us before this point, and make sure they
             // can't from now on. If they have: retry, done stays false.
@@ -388,7 +401,7 @@ public class TransactionalContext {
                 }
                 // Notify refs with watches
                 if (ref.getWatches().count() > 0)
-                    notify.add(new TransactionalFuture.Notify(ref, oldval, newval));
+                    notify.add(new Notify(ref, oldval, newval));
             }
 
             // Done
@@ -407,7 +420,7 @@ public class TransactionalContext {
             // Send notifications
             try {
                 if (done) {
-                    for (TransactionalFuture.Notify n : notify) {
+                    for (Notify n : notify) {
                         n.ref.notifyWatches(n.oldval, n.newval);
                     }
                 }

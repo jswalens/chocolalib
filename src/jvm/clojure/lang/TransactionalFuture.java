@@ -15,22 +15,6 @@ import java.util.concurrent.*;
 
 public class TransactionalFuture implements Callable, Future {
 
-    // Notify watches
-    // XXX here or in TxCtx?
-    // XXX was private
-    public static class Notify {
-        final public Ref ref;
-        final public Object oldval;
-        final public Object newval;
-
-        Notify(Ref ref, Object oldval, Object newval) {
-            this.ref = ref;
-            this.oldval = oldval;
-            this.newval = newval;
-        }
-    }
-
-
     // Future running in current thread (can be null)
     final static ThreadLocal<TransactionalFuture> future = new ThreadLocal<TransactionalFuture>();
 
