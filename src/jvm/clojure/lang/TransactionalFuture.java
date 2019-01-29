@@ -216,22 +216,21 @@ public class TransactionalFuture implements Callable, Future {
     }
 
     // Execute future in another thread.
-    public void spawn() {
+    public void fork() {
         fut = Agent.soloExecutor.submit(this);
     }
 
-    // Spawn future: outside transaction regular future, in transactional a
+    // Fork future: outside transaction regular future, in transactional a
     // transactional future.
-    static public Future spawnFuture(Callable fn) {
+    static public Future forkFuture(Callable fn) {
         TransactionalFuture current = TransactionalFuture.getCurrent();
         if (current == null) { // outside transaction
             return Agent.soloExecutor.submit(fn);
         } else { // inside transaction
             if (!current.tx.isNotKilled())
                 throw new LockingTransaction.StoppedEx();
-            TransactionalFuture f = new TransactionalFuture(current.tx, current,
-                fn);
-            f.spawn();
+            TransactionalFuture f = new TransactionalFuture(current.tx, current, fn);
+            f.fork();
             return f;
         }
     }

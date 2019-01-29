@@ -75,7 +75,7 @@
       (if-not (clojure.lang.TransactionalFuture/isCurrent)
         (original-future-call f)
         (let [f (binding-conveyor-fn  f)
-              fut (clojure.lang.TransactionalFuture/spawnFuture ^Callable f)]
+              fut (clojure.lang.TransactionalFuture/forkFuture ^Callable f)]
           (reify
             clojure.lang.IDeref
               (deref [_] (deref-future fut))
