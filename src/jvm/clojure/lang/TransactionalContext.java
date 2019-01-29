@@ -28,6 +28,7 @@ public class TransactionalContext {
         }
     }
 
+    // Tree of vals
     static class Vals<K, V> {
         final Map<K, V> vals = new HashMap<K, V>();
         final Vals<K, V> prev;
@@ -54,9 +55,8 @@ public class TransactionalContext {
             return vals.isEmpty();
         }
 
-        public void clear() { // XXX
+        public void clear() {
             this.vals.clear();
-            //this.prev = null; // XXX is this ok?
         }
     }
 
