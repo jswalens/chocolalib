@@ -168,9 +168,9 @@ public class LockingTransaction {
     // confusing; use TransactionalFuture.getCurrent() instead.
     public static LockingTransaction getRunning() {
         TransactionalFuture current = TransactionalFuture.getCurrent();
-        if (current == null)
+        if (current == null || current.ctx == null)
             return null;
-        return current.tx;
+        return current.ctx.tx;
     }
 
     // Try to "barge" the other transaction: if this transaction is older, and
@@ -216,17 +216,17 @@ public class LockingTransaction {
     // If we're already in a transaction, use that one, else creates one.
     static public Object runInTransaction(Callable fn) throws Exception {
         TransactionalFuture f = TransactionalFuture.getCurrent();
-        if (f == null) { // No transaction running: create one
+        if (f == null || f.ctx == null) { // No transaction running: create one
             LockingTransaction t = new LockingTransaction();
             return t.run(fn);
         } else { // Transaction exists
-            if (f.tx.info != null) { // Transaction in transaction: simply call fn
+            if (f.ctx.tx.info != null) { // Transaction in transaction: simply call fn
                 return fn.call();
             } else { // XXX I'm not sure when this happens?
                 // XXX This might actually be incorrect: what if a transaction
                 // is stopped (through barging) right before an inner dosync
                 // gets called?
-                return f.tx.run(fn);
+                return f.ctx.tx.run(fn);
             }
         }
     }

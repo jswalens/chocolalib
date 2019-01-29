@@ -19,8 +19,6 @@ public class TransactionalFuture implements Callable, Future {
     final static ThreadLocal<TransactionalFuture> future = new ThreadLocal<TransactionalFuture>();
 
 
-    // Transaction for this future
-    final LockingTransaction tx;
     // Transactional context
     TransactionalContext ctx;
 
@@ -36,7 +34,6 @@ public class TransactionalFuture implements Callable, Future {
 
     TransactionalFuture(LockingTransaction tx, TransactionalFuture parent,
                         Callable fn) {
-        this.tx = tx;
         this.fn = fn;
         if (parent != null)
             this.ctx = new TransactionalContext(tx, parent.ctx);
@@ -72,7 +69,7 @@ public class TransactionalFuture implements Callable, Future {
 
     // Execute future (in this thread).
     public Object call() throws Exception {
-        if(!tx.isNotKilled())
+        if(!ctx.tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();
 
         TransactionalFuture f = future.get();
@@ -92,7 +89,7 @@ public class TransactionalFuture implements Callable, Future {
     // This will throw an ExecutionException if an inner future threw an
     // exception (including StoppedEx or RetryEx).
     public Object callAndWait() throws Exception {
-        if(!tx.isNotKilled())
+        if(!ctx.tx.isNotKilled())
             throw new LockingTransaction.StoppedEx();
 
         TransactionalFuture f = future.get();
@@ -105,10 +102,10 @@ public class TransactionalFuture implements Callable, Future {
 
             // Wait for all futures to finish
             int n_stopped = 0;
-            while (n_stopped != tx.numberOfFutures()) {
+            while (n_stopped != ctx.tx.numberOfFutures()) {
                 Set<TransactionalFuture> fs;
-                synchronized (tx.futures) {
-                    fs = new HashSet<TransactionalFuture>(tx.futures);
+                synchronized (ctx.tx.futures) {
+                    fs = new HashSet<TransactionalFuture>(ctx.tx.futures);
                 }
                 for (TransactionalFuture f_ : fs) {
                     if (f_ != this) // Don't merge into self
@@ -134,12 +131,12 @@ public class TransactionalFuture implements Callable, Future {
     // transactional future.
     static public Future forkFuture(Callable fn) {
         TransactionalFuture current = TransactionalFuture.getCurrent();
-        if (current == null) { // outside transaction
+        if (current == null || current.ctx == null) { // outside transaction
             return Agent.soloExecutor.submit(fn);
         } else { // inside transaction
-            if (!current.tx.isNotKilled())
+            if (!current.ctx.tx.isNotKilled())
                 throw new LockingTransaction.StoppedEx();
-            TransactionalFuture f = new TransactionalFuture(current.tx, current, fn);
+            TransactionalFuture f = new TransactionalFuture(current.ctx.tx, current, fn);
             f.fork();
             return f;
         }

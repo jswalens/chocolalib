@@ -164,7 +164,7 @@ public class Actor implements Runnable {
         LockingTransaction.Info dependency = null;
         if (TransactionalFuture.getCurrent() != null)
             // tx running: tx = dependency
-            dependency = TransactionalFuture.getEx().tx.info;
+            dependency = TransactionalFuture.getEx().ctx.tx.info;
         else if (getCurrent() != null && getCurrent().tentative())
             // no tx running, but tentative turn: transitive dependency
             dependency = getCurrent().dependency;
