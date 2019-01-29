@@ -275,7 +275,7 @@ public class LockingTransaction {
                 if (!finished) {
                     stop(RETRY);
                 } else {
-                    committed = f_main.commit(this);
+                    committed = f_main.ctx.commit(this);
                 }
             }
         }
@@ -288,7 +288,7 @@ public class LockingTransaction {
     // This is provided for compatibility with Clojure: it is called in
     // clojure.lang.Agent/dispatchAction.
     void enqueue(Agent.Action action) {
-        TransactionalFuture.getEx().enqueue(action);
+        TransactionalFuture.getEx().ctx.enqueue(action);
     }
 
 }

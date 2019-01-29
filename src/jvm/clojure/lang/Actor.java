@@ -133,7 +133,7 @@ public class Actor implements Runnable {
         // case), but we could immediately execute (how does this affect the order?).
         if (TransactionalFuture.getCurrent() != null)
             // tx running: keep in tx
-            TransactionalFuture.getEx().spawnActor(actor);
+            TransactionalFuture.getEx().ctx.spawnActor(actor); // XXX
         else if (CURRENT_ACTOR.get() != null && CURRENT_ACTOR.get().tentative())
             // no tx running, but tentative turn: keep in actor
             CURRENT_ACTOR.get().spawned.add(actor);
@@ -146,7 +146,7 @@ public class Actor implements Runnable {
         Behavior behavior = new Behavior(behaviorBody, behaviorArgs);
         if (TransactionalFuture.getCurrent() != null)
             // tx running: only persist become in tx
-            TransactionalFuture.getEx().become(behavior);
+            TransactionalFuture.getEx().ctx.become(behavior); // XXX
         else
             // else: become in actor
             Actor.getEx().become(behavior);
