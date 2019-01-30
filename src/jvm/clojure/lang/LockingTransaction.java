@@ -212,7 +212,7 @@ public class LockingTransaction {
 
             boolean finished = false;
             try {
-                root = new TransactionalFuture(this, null, fn);
+                root = new TransactionalFuture(this, fn);
                 result = root.callAndWait();
                 Actor.abortIfDependencyAborted();
                 finished = true;

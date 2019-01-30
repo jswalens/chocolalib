@@ -34,13 +34,16 @@ public class TransactionalFuture implements Callable, Future {
     Object result;
 
 
-    TransactionalFuture(LockingTransaction tx, TransactionalFuture parent,
-                        Callable fn) {
+    // Create a root future.
+    TransactionalFuture(LockingTransaction tx, Callable fn) {
         this.fn = fn;
-        if (parent != null)
-            this.ctx = new TransactionalContext(tx, parent.ctx);
-        else
-            this.ctx = new TransactionalContext(tx, null);
+        this.ctx = new TransactionalContext(tx);
+    }
+
+    // Create a child future.
+    TransactionalFuture(TransactionalFuture parent, Callable fn) {
+        this.fn = fn;
+        this.ctx = new TransactionalContext(parent.ctx);
     }
 
 
@@ -128,8 +131,7 @@ public class TransactionalFuture implements Callable, Future {
         } else { // inside transaction
             if (!current.ctx.tx.isNotKilled())
                 throw new LockingTransaction.StoppedEx();
-            TransactionalFuture child = new TransactionalFuture(current.ctx.tx,
-                    current, fn);
+            TransactionalFuture child = new TransactionalFuture(current, fn);
             child.fork();
             current.children.add(child);
             return child;

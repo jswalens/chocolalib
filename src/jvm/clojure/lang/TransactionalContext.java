@@ -84,24 +84,27 @@ public class TransactionalContext {
     // Futures (actually their contexts), merged into this one
     final Set<TransactionalContext> merged = new HashSet<TransactionalContext>();
 
-    TransactionalContext(LockingTransaction tx, TransactionalContext parent) {
+    // Create a root transactional context.
+    TransactionalContext(LockingTransaction tx) {
         this.tx = tx;
+        this.snapshot = null;
+        this.vals = new Vals<Ref, Object>();
+    }
+
+    // Create a child transactional context.
+    TransactionalContext(TransactionalContext parent) {
+        this.tx = parent.tx;
         // Initialize vals to parent vals
-        if (parent != null) {
-            if (!parent.vals.isEmpty()) {
-                snapshot = parent.vals;
-                vals = new Vals<Ref, Object>(parent.vals);
-                parent.vals = new Vals<Ref, Object>(parent.vals);
-            } else {
-                // Optimization: if parent has not set anything, this can point
-                // straight to the parent's ancestor, and parent can "re-use"
-                // his vals. This way we avoid creating empty vals.
-                snapshot = parent.vals.prev;
-                vals = new Vals<Ref, Object>(parent.vals.prev);
-            }
+        if (!parent.vals.isEmpty()) {
+            snapshot = parent.vals;
+            vals = new Vals<Ref, Object>(parent.vals);
+            parent.vals = new Vals<Ref, Object>(parent.vals);
         } else {
-            snapshot = null;
-            vals = new Vals<Ref, Object>();
+            // Optimization: if parent has not set anything, this can point
+            // straight to the parent's ancestor, and parent can "re-use"
+            // his vals. This way we avoid creating empty vals.
+            snapshot = parent.vals.prev;
+            vals = new Vals<Ref, Object>(parent.vals.prev);
         }
     }
 
