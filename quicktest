@@ -1,0 +1,2 @@
+# Run all tests except chocola.transactions-long
+lein test :only chocola.actors chocola.import chocola.transactional-actors chocola.transactions chocola.transactions-misc chocola.futures chocola.import-1 chocola.transactional-futures chocola.transactions-futures chocola.futures-actors chocola.import-2 chocola.transactional-futures-resolve

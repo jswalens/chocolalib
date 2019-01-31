@@ -11,7 +11,7 @@
 (defn summing [o p c] (+ p (- c o)))
 
 (deftest seq-alter
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)]
       (dosync
         (is (= 0 @r1))
@@ -30,7 +30,7 @@
       (is (= 3 @r1)))))
 
 (deftest concurrent-alter
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)]
       (dosync
         (alter r1 inc)
@@ -44,7 +44,7 @@
       (is (= 2031 @r1)))))
 
 (deftest concurrent-alter-1
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)]
       (dosync
         (alter r1 inc)
@@ -59,7 +59,7 @@
       (is (= 31 @r1)))))
 
 (deftest concurrent-alter-2
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)]
       (dosync
         (alter r1 inc)
@@ -76,7 +76,7 @@
 
 (comment ; TODO: commute doesn't work yet
 (deftest concurrent-commute
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)]
       (dosync
         (commute r1 inc)
@@ -102,7 +102,7 @@
       (is (= 30 @r1)))))
 
 (deftest concurrent-set-no-conflict
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)
           r2 (ref 1 :resolve summing)]
       (dosync
@@ -113,7 +113,7 @@
       (is (= 21 @r2)))))
 
 (deftest concurrent-set-conflict-nondet
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)
           r2 (ref 1 :resolve summing)]
       (dosync
@@ -129,7 +129,7 @@
 
 (comment ; TODO: not sure this will work correctly yet
 (deftest no-deref
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)]
       (dosync
         (future (Thread/sleep 10) (ref-set r1 1)))
@@ -139,7 +139,7 @@
 ; === DIFFERENT RESOLVE FUNCTIONS ===
 
 (deftest sum
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0 :resolve summing)]
       (dosync
         (alter r1 inc)

@@ -53,7 +53,7 @@
 
 (deftest send-to-agent-out-tx-test []
   (let [ag      (agent 0)
-        n-iters 100]
+        n-iters 70]
     (dotimes [_i n-iters]
       (send ag inc))
     (await ag)
@@ -62,8 +62,8 @@
 (deftest send-to-agent-in-tx-test []
   (let [r         (ref 0)
         ag        (agent 0)
-        n-threads 100
-        n-iters   100
+        n-threads 70
+        n-iters   50
         pool      (Executors/newFixedThreadPool n-threads)
         tasks (map (fn [t]
                 (fn []
