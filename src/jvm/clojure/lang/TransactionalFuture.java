@@ -13,7 +13,7 @@ package clojure.lang;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class TransactionalFuture implements Callable, Future {
+public class TransactionalFuture implements Callable, Future, IDeref, IBlockingDeref, IPending {
 
     // Future running in current thread (can be null)
     final static ThreadLocal<TransactionalFuture> future = new ThreadLocal<TransactionalFuture>();
@@ -194,6 +194,32 @@ public class TransactionalFuture implements Callable, Future {
             return result != null; // XXX could also mean the result was actually null?
     }
 
+    @Override
+    public Object deref(long ms, Object timeoutValue) {
+        try {
+            return get(ms, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            return timeoutValue;
+        } catch (InterruptedException | ExecutionException e) {
+            // XXX safe to ignore?
+            return null;
+        }
+    }
+
+    @Override
+    public Object deref() {
+        try {
+            return get();
+        } catch (InterruptedException | ExecutionException e) {
+            // XXX safe to ignore?
+            return null;
+        }
+    }
+
+    @Override
+    public boolean isRealized() {
+        return fut.isDone();
+    }
 
     // Indicate future as having stopped (with certain transaction state).
     // OK to call twice (idempotent).
