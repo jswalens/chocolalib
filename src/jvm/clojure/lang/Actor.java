@@ -131,9 +131,9 @@ public class Actor implements Runnable {
     public static void start(Actor actor) {
         // TODO: what if transaction committed successfully (so dependency committed): now we still add to spawned (2nd
         // case), but we could immediately execute (how does this affect the order?).
-        if (TransactionalFuture.getCurrent() != null)
+        if (TransactionalFuture.inTransaction())
             // tx running: keep in tx
-            TransactionalFuture.getEx().ctx.spawnActor(actor); // XXX
+            TransactionalFuture.getContextEx().spawnActor(actor);
         else if (CURRENT_ACTOR.get() != null && CURRENT_ACTOR.get().tentative())
             // no tx running, but tentative turn: keep in actor
             CURRENT_ACTOR.get().spawned.add(actor);
@@ -144,9 +144,9 @@ public class Actor implements Runnable {
 
     public static void doBecome(IFn behaviorBody, ISeq behaviorArgs) {
         Behavior behavior = new Behavior(behaviorBody, behaviorArgs);
-        if (TransactionalFuture.getCurrent() != null)
+        if (TransactionalFuture.inTransaction())
             // tx running: only persist become in tx
-            TransactionalFuture.getEx().ctx.become(behavior); // XXX
+            TransactionalFuture.getContextEx().become(behavior);
         else
             // else: become in actor
             Actor.getEx().become(behavior);
@@ -162,9 +162,9 @@ public class Actor implements Runnable {
 
     public static void doEnqueue(Actor receiver, ISeq args) throws InterruptedException {
         LockingTransaction.Info dependency = null;
-        if (TransactionalFuture.getCurrent() != null)
+        if (TransactionalFuture.inTransaction())
             // tx running: tx = dependency
-            dependency = TransactionalFuture.getEx().ctx.tx.info;
+            dependency = TransactionalFuture.getContextEx().tx.info;
         else if (getCurrent() != null && getCurrent().tentative())
             // no tx running, but tentative turn: transitive dependency
             dependency = getCurrent().dependency;

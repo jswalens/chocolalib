@@ -72,7 +72,7 @@
 (alter-var-root #'clojure.core/future-call
   (fn [original-future-call]
     (fn [f]
-      (if-not (clojure.lang.TransactionalFuture/isCurrent)
+      (if-not (clojure.lang.TransactionalFuture/inTransaction)
         (original-future-call f)
         (let [f (binding-conveyor-fn  f)
               fut (clojure.lang.TransactionalFuture/forkFuture ^Callable f)]

@@ -47,24 +47,25 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
     }
 
 
-    // Is this thread in a transactional future?
-    static public boolean isCurrent() {
-        return getCurrent() != null;
+    static public boolean inTransaction() {
+        return getContext() != null;
     }
 
-    // Get this thread's future (possibly null).
-    static TransactionalFuture getCurrent() {
-        return future.get();
-    }
-
-    // Get this thread's future. Throws exception if no future/transaction is
-    // running in the current thread.
-    static TransactionalFuture getEx() {
+    // Get this thread's transactional context (possibly null).
+    static TransactionalContext getContext() {
         TransactionalFuture f = future.get();
-        if (f == null) {
+        if (f == null)
+            return null;
+        return f.ctx;
+    }
+
+    // Get this thread's transactional context. Throws exception if no future or
+    // transaction is running in the current thread.
+    static TransactionalContext getContextEx() {
+        TransactionalFuture f = future.get();
+        if (f == null)
             throw new IllegalStateException("No transaction running");
-        }
-        return f;
+        return f.ctx;
     }
 
 
@@ -121,10 +122,10 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
     // Fork future: outside transaction regular future, in transactional a
     // transactional future.
     static public Future forkFuture(Callable fn) {
-        TransactionalFuture current = TransactionalFuture.getCurrent();
+        TransactionalFuture current = future.get();
         if (current == null) { // outside transaction
             return Agent.soloExecutor.submit(fn);
-        } else if (current.ctx == null) {
+        } else if (current.ctx == null) { // XXX does this ever happen?
             Future child = Agent.soloExecutor.submit(fn);
             current.children.add(child);
             return child;
@@ -155,7 +156,7 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
     public Object get() throws ExecutionException, InterruptedException {
         // Note: in future_a, we call future_b.get()
         // => this = future_b; current = future_a
-        TransactionalFuture current = TransactionalFuture.getEx();
+        TransactionalContext currentCtx = TransactionalFuture.getContextEx();
 
         // Wait for other thread to finish
         if (fut != null)
@@ -163,7 +164,7 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
         // else: result set by call() directly
 
         // Merge into current
-        current.ctx.merge(this.ctx);
+        currentCtx.merge(this.ctx);
 
         return result;
     }
