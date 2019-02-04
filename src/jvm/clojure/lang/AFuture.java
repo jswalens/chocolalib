@@ -73,15 +73,13 @@ public class AFuture implements Callable, Future {
 
     // Execute future (in this thread).
     public Object call() throws Exception {
-        if(ctx != null && !ctx.tx.isNotKilled()) // in a killed tx
-            throw new LockingTransaction.StoppedEx();
-
-        AFuture f = future.get();
-        if (f != null)
+        if (future.get() != null)
             throw new IllegalStateException("Already in a future");
 
         try {
             future.set(this);
+            if(ctx != null && !ctx.tx.isNotKilled()) // in a killed tx
+                throw new LockingTransaction.StoppedEx();
             result = fn.call();
         } finally {
             future.remove();
