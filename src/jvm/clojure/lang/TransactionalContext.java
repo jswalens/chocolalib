@@ -92,7 +92,7 @@ public class TransactionalContext {
     // Agent sends
     final List<Agent.Action> actions = new ArrayList<Agent.Action>();
     // Futures (actually their contexts), merged into this one
-    final Set<TransactionalContext> merged = new HashSet<TransactionalContext>();
+    final Set<TransactionalContext> merged = new HashSet<>();
 
     // Create a root transactional context.
     TransactionalContext(LockingTransaction tx) {
@@ -118,6 +118,8 @@ public class TransactionalContext {
         }
     }
 
+    // Indicate transaction as having stopped (with certain transaction state).
+    // OK to call twice (idempotent).
     void stop(int status) {
         vals.clear();
         sets.clear();
