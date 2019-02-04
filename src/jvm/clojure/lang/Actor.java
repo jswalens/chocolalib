@@ -212,7 +212,8 @@ public class Actor implements Runnable {
                         // Below, catch everything except AbortEx
                     } catch (Throwable e) {
                         // TODO: graceful error handling. See error handling in Agent for a better solution.
-                        System.out.println("uncaught exception in actor: " + e.getMessage());
+                        System.out.println("Uncaught exception in actor " + this.toString() + ":");
+                        e.printStackTrace();
                     }
 
                     abortIfDependencyAborted();
