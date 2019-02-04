@@ -131,9 +131,9 @@ public class Actor implements Runnable {
     public static void start(Actor actor) {
         // TODO: what if transaction committed successfully (so dependency committed): now we still add to spawned (2nd
         // case), but we could immediately execute (how does this affect the order?).
-        if (TransactionalFuture.inTransaction())
+        if (AFuture.inTransaction())
             // tx running: keep in tx
-            TransactionalFuture.getContextEx().spawnActor(actor);
+            AFuture.getContextEx().spawnActor(actor);
         else if (CURRENT_ACTOR.get() != null && CURRENT_ACTOR.get().tentative())
             // no tx running, but tentative turn: keep in actor
             CURRENT_ACTOR.get().spawned.add(actor);
@@ -144,9 +144,9 @@ public class Actor implements Runnable {
 
     public static void doBecome(IFn behaviorBody, ISeq behaviorArgs) {
         Behavior behavior = new Behavior(behaviorBody, behaviorArgs);
-        if (TransactionalFuture.inTransaction())
+        if (AFuture.inTransaction())
             // tx running: only persist become in tx
-            TransactionalFuture.getContextEx().become(behavior);
+            AFuture.getContextEx().become(behavior);
         else
             // else: become in actor
             Actor.getEx().become(behavior);
@@ -162,9 +162,9 @@ public class Actor implements Runnable {
 
     public static void doEnqueue(Actor receiver, ISeq args) throws InterruptedException {
         LockingTransaction.Info dependency = null;
-        if (TransactionalFuture.inTransaction())
+        if (AFuture.inTransaction())
             // tx running: tx = dependency
-            dependency = TransactionalFuture.getContextEx().tx.info;
+            dependency = AFuture.getContextEx().tx.info;
         else if (getCurrent() != null && getCurrent().tentative())
             // no tx running, but tentative turn: transitive dependency
             dependency = getCurrent().dependency;

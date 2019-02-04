@@ -70,26 +70,24 @@
 ; FUTURES
 
 (alter-var-root #'clojure.core/future-call
-  (fn [original-future-call]
+  (fn [_original]
     (fn [f]
-      (if-not (clojure.lang.TransactionalFuture/inTransaction)
-        (original-future-call f)
-        (let [f (binding-conveyor-fn  f)
-              fut (clojure.lang.TransactionalFuture/forkFuture ^Callable f)]
-          (reify
-            clojure.lang.IDeref
-              (deref [_] (deref-future fut))
-            clojure.lang.IBlockingDeref
-              (deref [_ timeout-ms timeout-val]
-                (deref-future fut timeout-ms timeout-val))
-            clojure.lang.IPending
-              (isRealized [_] (.isDone fut))
-            java.util.concurrent.Future
-              (get [_] (.get fut))
-              (get [_ timeout unit] (.get fut timeout unit))
-              (isCancelled [_] (.isCancelled fut))
-              (isDone [_] (.isDone fut))
-              (cancel [_ interrupt?] (.cancel fut interrupt?))))))))
+      (let [f (binding-conveyor-fn f)
+              fut (clojure.lang.AFuture/forkFuture ^Callable f)]
+        (reify
+          clojure.lang.IDeref
+            (deref [_] (deref-future fut))
+          clojure.lang.IBlockingDeref
+            (deref [_ timeout-ms timeout-val]
+              (deref-future fut timeout-ms timeout-val))
+          clojure.lang.IPending
+            (isRealized [_] (.isDone fut))
+          java.util.concurrent.Future
+            (get [_] (.get fut))
+            (get [_ timeout unit] (.get fut timeout unit))
+            (isCancelled [_] (.isCancelled fut))
+            (isDone [_] (.isDone fut))
+            (cancel [_ interrupt?] (.cancel fut interrupt?)))))))
 ;(alter-meta! #'clojure.core/future-call assoc :doc "TODO")
 ;(alter-meta! #'clojure.core/future assoc :doc "TODO")
 

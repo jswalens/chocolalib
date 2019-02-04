@@ -11,6 +11,7 @@
 package clojure.lang;
 
 import java.util.*;
+import java.util.concurrent.Future;
 
 public class TransactionalContext {
 
@@ -91,6 +92,8 @@ public class TransactionalContext {
     Actor.Behavior nextBehavior = null;
     // Agent sends
     final List<Agent.Action> actions = new ArrayList<Agent.Action>();
+    // Forked futures
+    final Set<Future> children = new HashSet<>();
     // Futures (actually their contexts), merged into this one
     final Set<TransactionalContext> merged = new HashSet<>();
 

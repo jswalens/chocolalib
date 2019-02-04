@@ -13,16 +13,16 @@ package clojure.lang;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class TransactionalFuture implements Callable, Future, IDeref, IBlockingDeref, IPending {
+public class AFuture implements Callable, Future {
 
     // Future running in current thread (can be null)
-    final static ThreadLocal<TransactionalFuture> future = new ThreadLocal<TransactionalFuture>();
+    final static ThreadLocal<AFuture> future = new ThreadLocal<AFuture>();
 
 
     // Child futures.
     final Set<Future> children = new HashSet<Future>();
     // Transactional context
-    TransactionalContext ctx;
+    TransactionalContext ctx = null;
 
     // Java Future executing this future.
     // null if executing in main thread.
@@ -34,18 +34,23 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
     Object result;
 
 
-    // Create a root future.
-    TransactionalFuture(LockingTransaction tx, Callable fn) {
+    // Create a future.
+    AFuture(Callable fn) {
         this.fn = fn;
-        this.ctx = new TransactionalContext(tx);
     }
 
-    // Create a child future.
-    TransactionalFuture(TransactionalFuture parent, Callable fn) {
-        this.fn = fn;
-        this.ctx = new TransactionalContext(parent.ctx);
-    }
 
+    // Get current future.
+    // This never returns null.
+    static AFuture getCurrent() {
+        AFuture f = future.get();
+        if (f == null) {
+            // In the main thread, no future may exist.
+            f = new AFuture(null);
+            future.set(f);
+        }
+        return f;
+    }
 
     static public boolean inTransaction() {
         return getContext() != null;
@@ -53,61 +58,31 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
 
     // Get this thread's transactional context (possibly null).
     static TransactionalContext getContext() {
-        TransactionalFuture f = future.get();
-        if (f == null)
-            return null;
-        return f.ctx;
+        return getCurrent().ctx;
     }
 
     // Get this thread's transactional context. Throws exception if no future or
     // transaction is running in the current thread.
     static TransactionalContext getContextEx() {
-        TransactionalFuture f = future.get();
-        if (f == null)
+        TransactionalContext ctx = getContext();
+        if (ctx == null)
             throw new IllegalStateException("No transaction running");
-        return f.ctx;
+        return ctx;
     }
 
 
     // Execute future (in this thread).
     public Object call() throws Exception {
-        if(!ctx.tx.isNotKilled())
+        if(ctx != null && !ctx.tx.isNotKilled()) // in a killed tx
             throw new LockingTransaction.StoppedEx();
 
-        TransactionalFuture f = future.get();
+        AFuture f = future.get();
         if (f != null)
             throw new IllegalStateException("Already in a future");
 
         try {
             future.set(this);
             result = fn.call();
-        } finally {
-            future.remove();
-        }
-        return result;
-    }
-
-    // Execute future (in this thread), and wait for all sub-futures to finish.
-    // This will throw an ExecutionException if an inner future threw an
-    // exception (including StoppedEx or RetryEx).
-    public Object callAndWait() throws Exception {
-        if(!ctx.tx.isNotKilled())
-            throw new LockingTransaction.StoppedEx();
-
-        TransactionalFuture f = future.get();
-        if (f != null)
-            throw new IllegalStateException("Already in a future");
-
-        try {
-            future.set(this);
-            result = fn.call();
-
-            // Wait for all futures to finish
-            // This is safe to do in this thread, as the current future's body
-            // has finished.
-            for (Future child : children) {
-                child.get();
-            }
         } finally {
             future.remove();
         }
@@ -121,22 +96,24 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
 
     // Fork future: outside transaction regular future, in transactional a
     // transactional future.
-    static public Future forkFuture(Callable fn) {
-        TransactionalFuture current = future.get();
-        if (current == null) { // outside transaction
-            return Agent.soloExecutor.submit(fn);
-        } else if (current.ctx == null) { // XXX does this ever happen?
-            Future child = Agent.soloExecutor.submit(fn);
-            current.children.add(child);
-            return child;
-        } else { // inside transaction
-            if (!current.ctx.tx.isNotKilled())
-                throw new LockingTransaction.StoppedEx();
-            TransactionalFuture child = new TransactionalFuture(current, fn);
-            child.fork();
-            current.children.add(child);
-            return child;
+    static public Future forkFuture(Callable fn) { // XXX
+        AFuture current = getCurrent();
+
+        if (inTransaction() && !current.ctx.tx.isNotKilled())
+            throw new LockingTransaction.StoppedEx();
+
+        AFuture child;
+        if (!inTransaction()) {
+            child = new AFuture(fn);
+        } else {
+            child = new AFuture(fn);
+            child.ctx = new TransactionalContext(current.ctx);
         }
+        current.children.add(child);
+        if (inTransaction())
+            current.ctx.children.add(child); // XXX
+        child.fork();
+        return child;
     }
 
 
@@ -156,15 +133,18 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
     public Object get() throws ExecutionException, InterruptedException {
         // Note: in future_a, we call future_b.get()
         // => this = future_b; current = future_a
-        TransactionalContext currentCtx = TransactionalFuture.getContextEx();
 
         // Wait for other thread to finish
         if (fut != null)
             fut.get(); // sets result
-        // else: result set by call() directly
+        // else: result set by call() directly XXX
 
-        // Merge into current
-        currentCtx.merge(this.ctx);
+        // TODO deal with case that future_b is txional but future_a not
+        if (inTransaction() && this.ctx != null) { // both txional
+            TransactionalContext currentCtx = AFuture.getContextEx();
+            // Merge 'this' (future b) into 'current' (future a).
+            currentCtx.merge(this.ctx);
+        }
 
         return result;
     }
@@ -193,40 +173,6 @@ public class TransactionalFuture implements Callable, Future, IDeref, IBlockingD
             return fut.isCancelled();
         else
             return result != null; // XXX could also mean the result was actually null?
-    }
-
-    @Override
-    public Object deref(long ms, Object timeoutValue) {
-        try {
-            return get(ms, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            return timeoutValue;
-        } catch (InterruptedException | ExecutionException e) {
-            // XXX safe to ignore?
-            return null;
-        }
-    }
-
-    @Override
-    public Object deref() {
-        try {
-            return get();
-        } catch (InterruptedException | ExecutionException e) {
-            // XXX safe to ignore?
-            return null;
-        }
-    }
-
-    @Override
-    public boolean isRealized() {
-        return fut.isDone();
-    }
-
-    // Indicate future as having stopped (with certain transaction state).
-    // OK to call twice (idempotent).
-    // FIXME: remove this?
-    void stop(int status) {
-        ctx.stop(status);
     }
 
 }

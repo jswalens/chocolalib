@@ -10,13 +10,9 @@
 
 package clojure.lang;
 
-import java.util.*;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.CountDownLatch;
 
 @SuppressWarnings({"SynchronizeOnNonFinalField"})
 public class LockingTransaction {
@@ -93,8 +89,8 @@ public class LockingTransaction {
     long startTime;
     // Time point at which current attempt of transaction started.
     long readPoint;
-    // Root future
-    TransactionalFuture root;
+    // Transactional context in root future
+    TransactionalContext root;
 
 
     // Indicate transaction as having stopped (with certain state).
@@ -109,7 +105,7 @@ public class LockingTransaction {
             }
             info = null;
             // From now on, isNotKilled returns false and all operations on refs
-            // (in TransactionalFuture) will throw StoppedEx
+            // (in AFuture) will throw StoppedEx
         }
         root.stop(status);
     }
@@ -122,18 +118,18 @@ public class LockingTransaction {
     // have been killed, so it is not necessarily running. This function is only
     // provided for compatibility with existing Clojure, which uses it in the
     // definition of io!. Don't use it because its name is confusing; use
-    // TransactionalFuture.inTransaction() instead.
+    // AFuture.inTransaction() instead.
     public static boolean isRunning() {
-        return TransactionalFuture.inTransaction();
+        return AFuture.inTransaction();
     }
 
     // Get the transaction we're in. Note that the transaction may
     // have been killed, so it is not necessarily running. This function is only
     // provided for compatibility with existing Clojure, which uses it in
     // clojure.lang.Agent/dispatchAction. Don't use it because its name is
-    // confusing; use TransactionalFuture.getContext() instead.
+    // confusing; use AFuture.getContext() instead.
     public static LockingTransaction getRunning() {
-        TransactionalContext ctx = TransactionalFuture.getContext();
+        TransactionalContext ctx = AFuture.getContext();
         if (ctx == null)
             return null;
         return ctx.tx;
@@ -182,7 +178,7 @@ public class LockingTransaction {
     // If we're already in a transaction, use that one, else creates one.
     // TODO: move this?
     static public Object runInTransaction(Callable fn) throws Exception {
-        TransactionalContext ctx = TransactionalFuture.getContext();
+        TransactionalContext ctx = AFuture.getContext();
         if (ctx == null) { // No transaction running: create one
             LockingTransaction t = new LockingTransaction();
             return t.run(fn);
@@ -213,8 +209,15 @@ public class LockingTransaction {
 
             boolean finished = false;
             try {
-                root = new TransactionalFuture(this, fn);
-                result = root.callAndWait();
+                root = new TransactionalContext(this);
+                AFuture.getCurrent().ctx = root;
+                result = fn.call();
+                // Wait for all futures forked during the transaction to finish
+                // This is safe to do in this thread, as the current future's
+                // body has finished, so all children have been spawned.
+                for (Future future : root.children) {
+                    future.get();
+                }
                 Actor.abortIfDependencyAborted();
                 finished = true;
             } catch (StoppedEx ex) {
@@ -238,11 +241,13 @@ public class LockingTransaction {
                     throw ex; // throw original ExecutionException, not cause
                 }
             } finally {
+                AFuture.getCurrent().ctx = null; // XXX this is a bit ugly
                 if (!finished) {
                     stop(RETRY);
                 } else {
-                    committed = root.ctx.commit(this);
+                    committed = root.commit(this);
                 }
+                root = null;
             }
         }
         if (!committed)
@@ -254,7 +259,7 @@ public class LockingTransaction {
     // This is provided for compatibility with Clojure: it is called in
     // clojure.lang.Agent/dispatchAction.
     void enqueue(Agent.Action action) {
-        TransactionalFuture.getContextEx().enqueue(action);
+        AFuture.getContextEx().enqueue(action);
     }
 
 }
