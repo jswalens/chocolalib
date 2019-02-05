@@ -32,6 +32,8 @@ public class AFuture implements Callable, Future {
     final Callable fn;
     // Result of future (return value of fn)
     Object result;
+    // Has the task finished?
+    boolean complete = false;
 
 
     // Create a future.
@@ -102,6 +104,7 @@ public class AFuture implements Callable, Future {
             if(ctx != null && !ctx.tx.isNotKilled()) // in a killed tx
                 throw new LockingTransaction.StoppedEx();
             result = fn.call();
+            complete = true;
         } finally {
             CURRENT_FUTURE.remove();
         }
@@ -137,10 +140,9 @@ public class AFuture implements Callable, Future {
 
     // Attempts to cancel execution of this task.
     public boolean cancel(boolean mayInterruptIfRunning) {
-        if (javaFuture != null)
-            return javaFuture.cancel(mayInterruptIfRunning);
-        else
-            return false;
+        if (javaFuture == null)
+            throw new IllegalStateException("Can not cancel root thread");
+        return javaFuture.cancel(mayInterruptIfRunning);
     }
 
     // Waits if necessary for the computation to complete, and then retrieves
@@ -159,7 +161,7 @@ public class AFuture implements Callable, Future {
 
         // TODO deal with case that future_b is txional but future_a not
         if (inTransaction() && this.ctx != null) { // both txional
-            TransactionalContext currentCtx = AFuture.getContextEx();
+            TransactionalContext currentCtx = getContextEx();
             // Merge 'this' (future b) into 'current' (future a).
             currentCtx.merge(this.ctx);
         }
@@ -172,25 +174,21 @@ public class AFuture implements Callable, Future {
     public Object get(long timeout, TimeUnit unit) throws InterruptedException,
     ExecutionException, TimeoutException {
         if (javaFuture != null)
-            return javaFuture.get(timeout, unit);
-        else
-            return result;
+            javaFuture.get(timeout, unit); // Wait until the future has finished
+        // This throws a TimeoutException if it does not finish in time.
+        return get(); // Delegate to normal get if it has
     }
 
     // Returns true if this task was cancelled before it completed normally.
     public boolean isCancelled() {
-        if (javaFuture != null)
-            return javaFuture.isCancelled();
-        else
+        if (javaFuture == null)
             return false;
+        return javaFuture.isCancelled();
     }
 
     // Returns true if this task completed.
     public boolean isDone() {
-        if (javaFuture != null)
-            return javaFuture.isCancelled();
-        else
-            return result != null; // XXX could also mean the result was actually null?
+        return complete;
     }
 
     // Merge all children.
