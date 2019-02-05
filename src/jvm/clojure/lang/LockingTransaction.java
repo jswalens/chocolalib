@@ -198,7 +198,6 @@ public class LockingTransaction {
     Object run(Callable fn) throws Exception {
         boolean committed = false;
         Object result = null;
-
         for (int i = 0; !committed && i < RETRY_LIMIT; i++) {
             readPoint = lastPoint.incrementAndGet();
             if (i == 0) {
@@ -207,9 +206,12 @@ public class LockingTransaction {
             }
             info = new Info(RUNNING, startPoint);
 
-            boolean finished = false;
             AFuture rootFuture = AFuture.getCurrent();
+            boolean emptyRootFuture = (rootFuture == null);
+            boolean finished = false;
             try {
+                if (emptyRootFuture)
+                    rootFuture = AFuture.createRootFuture();
                 rootFuture.enterTransaction(this);
                 root = AFuture.getContext();
                 result = fn.call();
@@ -249,6 +251,8 @@ public class LockingTransaction {
                     committed = root.commit(this);
                 }
                 root = null;
+                if (emptyRootFuture)
+                    AFuture.destructRootFuture();
             }
         }
         if (!committed)

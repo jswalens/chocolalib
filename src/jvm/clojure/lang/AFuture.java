@@ -39,17 +39,25 @@ public class AFuture implements Callable, Future {
         this.fn = fn;
     }
 
+    // Create a 'root' future, i.e. create an AFuture object for a thread
+    // outside our control.
+    // You should always call destructRootFuture() when this is no longer
+    // needed.
+    static AFuture createRootFuture() {
+        AFuture f = new AFuture(null);
+        future.set(f);
+        return f;
+    }
+
+    static void destructRootFuture() {
+        future.remove();
+    }
 
     // Get current future.
-    // This never returns null.
+    // This is null in the main thread and threads created outside our control
+    // (e.g. agents).
     static AFuture getCurrent() {
-        AFuture f = future.get();
-        if (f == null) {
-            // In the main thread, no future may exist.
-            f = new AFuture(null);
-            future.set(f);
-        }
-        return f;
+        return future.get();
     }
 
     void enterTransaction(LockingTransaction tx) {
@@ -66,7 +74,11 @@ public class AFuture implements Callable, Future {
 
     // Get this thread's transactional context (possibly null).
     static TransactionalContext getContext() {
-        return getCurrent().ctx;
+        AFuture f = getCurrent();
+        if (f == null)
+            return null;
+        else
+            return f.ctx; // possibly null
     }
 
     // Get this thread's transactional context. Throws exception if no future or
@@ -102,22 +114,21 @@ public class AFuture implements Callable, Future {
 
     // Fork future: outside transaction regular future, in transactional a
     // transactional future.
-    static public Future forkFuture(Callable fn) { // XXX
+    static public Future forkFuture(Callable fn) {
         AFuture current = getCurrent();
-
-        if (inTransaction() && !current.ctx.tx.isNotKilled())
-            throw new LockingTransaction.StoppedEx();
-
-        AFuture child;
-        if (!inTransaction()) {
-            child = new AFuture(fn);
+        AFuture child = new AFuture(fn);
+        if (current == null) {
+            // current thread is outside our control, so we can't do anything
         } else {
-            child = new AFuture(fn);
-            child.ctx = new TransactionalContext(current.ctx);
+            if (inTransaction() && !current.ctx.tx.isNotKilled())
+                throw new LockingTransaction.StoppedEx();
+
+            current.children.add(child);
+            if (inTransaction()) {
+                child.ctx = new TransactionalContext(current.ctx);
+                current.ctx.children.add(child); // XXX
+            }
         }
-        current.children.add(child);
-        if (inTransaction())
-            current.ctx.children.add(child); // XXX
         child.fork();
         return child;
     }
