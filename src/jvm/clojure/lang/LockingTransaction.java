@@ -208,9 +208,10 @@ public class LockingTransaction {
             info = new Info(RUNNING, startPoint);
 
             boolean finished = false;
+            AFuture rootFuture = AFuture.getCurrent();
             try {
-                root = new TransactionalContext(this);
-                AFuture.getCurrent().ctx = root;
+                rootFuture.enterTransaction(this);
+                root = AFuture.getContext();
                 result = fn.call();
                 // Wait for all futures forked during the transaction to finish
                 // This is safe to do in this thread, as the current future's
@@ -241,7 +242,7 @@ public class LockingTransaction {
                     throw ex; // throw original ExecutionException, not cause
                 }
             } finally {
-                AFuture.getCurrent().ctx = null; // XXX this is a bit ugly
+                rootFuture.exitTransaction();
                 if (!finished) {
                     stop(RETRY);
                 } else {

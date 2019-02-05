@@ -52,6 +52,14 @@ public class AFuture implements Callable, Future {
         return f;
     }
 
+    void enterTransaction(LockingTransaction tx) {
+        ctx = new TransactionalContext(tx);
+    }
+
+    void exitTransaction() {
+        ctx = null;
+    }
+
     static public boolean inTransaction() {
         return getContext() != null;
     }
