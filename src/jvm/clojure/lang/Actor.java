@@ -200,6 +200,7 @@ public class Actor implements Runnable {
                     try {
                         IFn behaviorInstance = (IFn) behavior.apply();
 
+                        AFuture.createRootFuture();
                         // Bind *actor* to this
                         // Note: the behavior is encapsulated in a "binding-conveyor", hence, the first action when
                         // creating the behaviorInstance above is resetting its frame to the bindings that were present
@@ -228,12 +229,12 @@ public class Actor implements Runnable {
                     dependency = null;
                     oldBehavior = null;
                     spawned.clear();
+                    Var.popThreadBindings();
+                    AFuture.destructRootFuture();
                 }
             }
-    } catch (InterruptedException ex) {
-            // interrupt thread
-    } finally {
-            Var.popThreadBindings();
+        } catch (InterruptedException ex) {
+                // interrupt thread
         }
     }
 
