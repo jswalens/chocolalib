@@ -11,6 +11,7 @@
 package clojure.lang;
 
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 public class TransactionalContext {
@@ -136,8 +137,8 @@ public class TransactionalContext {
             if (status == LockingTransaction.COMMITTED) {
                 for (Agent.Action action : actions) {
                     Agent.dispatchAction(action);
-                    // By now, TransactionFuture.future.get() is null, so
-                    // dispatches happen immediately
+                    // By now, transactional context is null, so dispatches
+                    // happen immediately
                 }
                 for (Actor actor : spawned) {
                     Actor.start(actor); // TODO: doesn't actually start them, just adds them to the turn's list
@@ -342,6 +343,13 @@ public class TransactionalContext {
         merged.addAll(child.merged);
 
         merged.add(child);
+    }
+
+    // Merge all children.
+    void mergeChildren() throws ExecutionException, InterruptedException {
+        for (Future future : children) {
+            future.get();
+        }
     }
 
     // Commit

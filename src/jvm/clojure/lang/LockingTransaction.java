@@ -84,13 +84,13 @@ public class LockingTransaction {
     // Transaction info. Can be read by other transactions.
     Info info;
     // Time point at which transaction was first started.
-    long startPoint;
+    private long startPoint;
     // Time at which transaction first started.
-    long startTime;
+    private long startTime;
     // Time point at which current attempt of transaction started.
     long readPoint;
     // Transactional context in root future
-    TransactionalContext root;
+    private TransactionalContext root;
 
 
     // Indicate transaction as having stopped (with certain state).
@@ -218,9 +218,7 @@ public class LockingTransaction {
                 // Wait for all futures forked during the transaction to finish
                 // This is safe to do in this thread, as the current future's
                 // body has finished, so all children have been spawned.
-                for (Future future : root.children) {
-                    future.get();
-                }
+                root.mergeChildren();
                 Actor.abortIfDependencyAborted();
                 finished = true;
             } catch (StoppedEx ex) {

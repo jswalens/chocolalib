@@ -16,7 +16,7 @@ import java.util.concurrent.*;
 public class AFuture implements Callable, Future {
 
     // Future running in current thread (can be null)
-    final static ThreadLocal<AFuture> future = new ThreadLocal<AFuture>();
+    final static ThreadLocal<AFuture> CURRENT_FUTURE = new ThreadLocal<AFuture>();
 
 
     // Child futures.
@@ -25,8 +25,8 @@ public class AFuture implements Callable, Future {
     TransactionalContext ctx = null;
 
     // Java Future executing this future.
-    // null if executing in main thread.
-    Future fut = null;
+    // null if executing in main thread or thread outside our control.
+    Future javaFuture = null;
 
     // Function executed in this future
     final Callable fn;
@@ -45,20 +45,21 @@ public class AFuture implements Callable, Future {
     // needed.
     static AFuture createRootFuture() {
         AFuture f = new AFuture(null);
-        future.set(f);
+        CURRENT_FUTURE.set(f);
         return f;
     }
 
     static void destructRootFuture() {
-        future.remove();
+        CURRENT_FUTURE.remove();
     }
 
     // Get current future.
     // This is null in the main thread and threads created outside our control
     // (e.g. agents).
     static AFuture getCurrent() {
-        return future.get();
+        return CURRENT_FUTURE.get();
     }
+
 
     void enterTransaction(LockingTransaction tx) {
         ctx = new TransactionalContext(tx);
@@ -93,23 +94,23 @@ public class AFuture implements Callable, Future {
 
     // Execute future (in this thread).
     public Object call() throws Exception {
-        if (future.get() != null)
+        if (CURRENT_FUTURE.get() != null)
             throw new IllegalStateException("Already in a future");
 
         try {
-            future.set(this);
+            CURRENT_FUTURE.set(this);
             if(ctx != null && !ctx.tx.isNotKilled()) // in a killed tx
                 throw new LockingTransaction.StoppedEx();
             result = fn.call();
         } finally {
-            future.remove();
+            CURRENT_FUTURE.remove();
         }
         return result;
     }
 
     // Execute future in another thread.
     public void fork() {
-        fut = Agent.soloExecutor.submit(this);
+        javaFuture = Agent.soloExecutor.submit(this);
     }
 
     // Fork future: outside transaction regular future, in transactional a
@@ -136,8 +137,8 @@ public class AFuture implements Callable, Future {
 
     // Attempts to cancel execution of this task.
     public boolean cancel(boolean mayInterruptIfRunning) {
-        if (fut != null)
-            return fut.cancel(mayInterruptIfRunning);
+        if (javaFuture != null)
+            return javaFuture.cancel(mayInterruptIfRunning);
         else
             return false;
     }
@@ -152,8 +153,8 @@ public class AFuture implements Callable, Future {
         // => this = future_b; current = future_a
 
         // Wait for other thread to finish
-        if (fut != null)
-            fut.get(); // sets result
+        if (javaFuture != null)
+            javaFuture.get(); // sets result
         // else: result set by call() directly XXX
 
         // TODO deal with case that future_b is txional but future_a not
@@ -170,26 +171,33 @@ public class AFuture implements Callable, Future {
     // complete, and then retrieves its result, if available.
     public Object get(long timeout, TimeUnit unit) throws InterruptedException,
     ExecutionException, TimeoutException {
-        if (fut != null)
-            return fut.get(timeout, unit);
+        if (javaFuture != null)
+            return javaFuture.get(timeout, unit);
         else
             return result;
     }
 
     // Returns true if this task was cancelled before it completed normally.
     public boolean isCancelled() {
-        if (fut != null)
-            return fut.isCancelled();
+        if (javaFuture != null)
+            return javaFuture.isCancelled();
         else
             return false;
     }
 
     // Returns true if this task completed.
     public boolean isDone() {
-        if (fut != null)
-            return fut.isCancelled();
+        if (javaFuture != null)
+            return javaFuture.isCancelled();
         else
             return result != null; // XXX could also mean the result was actually null?
+    }
+
+    // Merge all children.
+    void mergeChildren() throws ExecutionException, InterruptedException {
+        for (Future future : children) {
+            future.get();
+        }
     }
 
 }

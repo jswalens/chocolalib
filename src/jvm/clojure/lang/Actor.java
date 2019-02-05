@@ -185,56 +185,51 @@ public class Actor implements Runnable {
         m.put(ACTOR_VAR, this);
         IPersistentMap bindings = PersistentArrayMap.create(m);
 
-        try {
-            while (true) {
-                try {
-                    // TODO: end actor when it is no longer needed (garbage collection of actors)
-                    Message message = inbox.take();
+        while (true) {
+            // TODO: end actor when it is no longer needed (garbage collection
+            // of actors)
+            try {
+                Message message = inbox.take();
 
-                    // If message has a dependency, this is a tentative turn
-                    if (message.dependency != null) {
-                        dependency = message.dependency;
-                        oldBehavior = behavior;
-                    }
-
-                    try {
-                        IFn behaviorInstance = (IFn) behavior.apply();
-
-                        AFuture.createRootFuture();
-                        // Bind *actor* to this
-                        // Note: the behavior is encapsulated in a "binding-conveyor", hence, the first action when
-                        // creating the behaviorInstance above is resetting its frame to the bindings that were present
-                        // when the behavior was defined. Here, we extend those bindings with one for *actor*.
-                        Var.pushThreadBindings(bindings);
-
-                        behaviorInstance.applyTo(message.args);
-                    } catch (AbortEx e) {
-                        throw e;
-                        // Below, catch everything except AbortEx
-                    } catch (Throwable e) {
-                        // TODO: graceful error handling. See error handling in Agent for a better solution.
-                        System.out.println("Uncaught exception in actor " + this.toString() + ":");
-                        e.printStackTrace();
-                    }
-
-                    abortIfDependencyAborted();
-
-                    dependency = null;
-                    for (Actor actor : spawned) {
-                        Actor.start(actor);
-                    }
-                } catch (AbortEx e) {
-                    behavior = oldBehavior;
-                } finally {
-                    dependency = null;
-                    oldBehavior = null;
-                    spawned.clear();
-                    Var.popThreadBindings();
-                    AFuture.destructRootFuture();
+                // If message has a dependency, this is a tentative turn
+                if (message.dependency != null) {
+                    dependency = message.dependency;
+                    oldBehavior = behavior;
                 }
+
+                IFn behaviorInstance = (IFn) behavior.apply();
+
+                AFuture rootFuture = AFuture.createRootFuture();
+                // Bind *actor* to this
+                // Note: because behavior is encapsulated in a binding-conveyor,
+                // when behaviorInstance is created above, it will reset its
+                // frame to the bindings that were present when the behavior was
+                // defined. Here, we extend those bindings with one for *actor*.
+                Var.pushThreadBindings(bindings);
+
+                behaviorInstance.applyTo(message.args);
+
+                rootFuture.mergeChildren();
+                abortIfDependencyAborted();
+
+                dependency = null;
+                for (Actor actor : spawned) {
+                    Actor.start(actor);
+                }
+            } catch (AbortEx e) {
+                behavior = oldBehavior;
+            } catch (Throwable e) {
+                // TODO: graceful error handling. See error handling in Agent
+                // for a better solution.
+                System.out.println("Uncaught exception in actor:");
+                e.printStackTrace();
+            } finally {
+                dependency = null;
+                oldBehavior = null;
+                spawned.clear();
+                Var.popThreadBindings();
+                AFuture.destructRootFuture();
             }
-        } catch (InterruptedException ex) {
-                // interrupt thread
         }
     }
 
