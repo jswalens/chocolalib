@@ -313,10 +313,10 @@
         firsts (doall (map #(spawn first_ 0 %) seconds))]
     (send-promises-and-wait firsts)
     (is (= n @n-first))
-    (is (= n @n-second))
-    (is (= n @n-third))
     (doseq [t thirds]
-      (test-with-promise t :get 1 100))))
+      (test-with-promise t :get 1 100))
+    (is (= n @n-second))
+    (is (= n @n-third))))
 
 (deftest tx-to-non-tx-to-tx
   "Tx -> non-tx -> tx"
@@ -359,6 +359,6 @@
     (is (= n @n-first))
     (doseq [s seconds]
       (test-with-promise s :get 1 1000))
-    (is (= n @n-third))
     (doseq [t thirds]
-      (test-with-promise t :get 1 100))))
+      (test-with-promise t :get 1 100))
+    (is (= n @n-third))))

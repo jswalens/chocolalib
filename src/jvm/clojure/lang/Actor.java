@@ -46,6 +46,23 @@ public class Actor implements Runnable {
             throw Actor.abortex;
     }
 
+    static class Message {
+        final Actor receiver;
+        final ISeq args;
+        final LockingTransaction.Info dependency; // can be null
+
+        public Message(Actor receiver, ISeq args) {
+            this(receiver, args, null);
+        }
+
+        public Message(Actor receiver, ISeq args, LockingTransaction.Info dependency) {
+            this.receiver = receiver;
+            this.args = args;
+            this.dependency = dependency;
+        }
+
+    }
+
     static class Inbox {
         private final LinkedBlockingDeque<Message> q = new LinkedBlockingDeque<Message>();
 
@@ -86,23 +103,6 @@ public class Actor implements Runnable {
     private List<Actor> spawned = new ArrayList<Actor>();
     private Behavior oldBehavior = null;
 
-    static class Message {
-        final Actor receiver;
-        final ISeq args;
-        final LockingTransaction.Info dependency; // can be null
-
-        public Message(Actor receiver, ISeq args) {
-            this(receiver, args, null);
-        }
-
-        public Message(Actor receiver, ISeq args, LockingTransaction.Info dependency) {
-            this.receiver = receiver;
-            this.args = args;
-            this.dependency = dependency;
-        }
-
-    }
-
     public Actor(IFn behaviorBody, ISeq behaviorArgs) {
         behavior = new Behavior(behaviorBody, behaviorArgs);
     }
@@ -131,9 +131,9 @@ public class Actor implements Runnable {
     public static void start(Actor actor) {
         // TODO: what if transaction committed successfully (so dependency committed): now we still add to spawned (2nd
         // case), but we could immediately execute (how does this affect the order?).
-        if (TransactionalFuture.getCurrent() != null)
+        if (AFuture.inTransaction())
             // tx running: keep in tx
-            TransactionalFuture.getEx().spawnActor(actor);
+            AFuture.getContextEx().spawnActor(actor);
         else if (CURRENT_ACTOR.get() != null && CURRENT_ACTOR.get().tentative())
             // no tx running, but tentative turn: keep in actor
             CURRENT_ACTOR.get().spawned.add(actor);
@@ -144,9 +144,9 @@ public class Actor implements Runnable {
 
     public static void doBecome(IFn behaviorBody, ISeq behaviorArgs) {
         Behavior behavior = new Behavior(behaviorBody, behaviorArgs);
-        if (TransactionalFuture.getCurrent() != null)
+        if (AFuture.inTransaction())
             // tx running: only persist become in tx
-            TransactionalFuture.getEx().become(behavior);
+            AFuture.getContextEx().become(behavior);
         else
             // else: become in actor
             Actor.getEx().become(behavior);
@@ -162,9 +162,9 @@ public class Actor implements Runnable {
 
     public static void doEnqueue(Actor receiver, ISeq args) throws InterruptedException {
         LockingTransaction.Info dependency = null;
-        if (TransactionalFuture.getCurrent() != null)
+        if (AFuture.inTransaction())
             // tx running: tx = dependency
-            dependency = TransactionalFuture.getEx().tx.info;
+            dependency = AFuture.getContextEx().tx.info;
         else if (getCurrent() != null && getCurrent().tentative())
             // no tx running, but tentative turn: transitive dependency
             dependency = getCurrent().dependency;
@@ -185,54 +185,51 @@ public class Actor implements Runnable {
         m.put(ACTOR_VAR, this);
         IPersistentMap bindings = PersistentArrayMap.create(m);
 
-        try {
-            while (true) {
-                try {
-                    // TODO: end actor when it is no longer needed (garbage collection of actors)
-                    Message message = inbox.take();
+        while (true) {
+            // TODO: end actor when it is no longer needed (garbage collection
+            // of actors)
+            try {
+                Message message = inbox.take();
 
-                    // If message has a dependency, this is a tentative turn
-                    if (message.dependency != null) {
-                        dependency = message.dependency;
-                        oldBehavior = behavior;
-                    }
-
-                    try {
-                        IFn behaviorInstance = (IFn) behavior.apply();
-
-                        // Bind *actor* to this
-                        // Note: the behavior is encapsulated in a "binding-conveyor", hence, the first action when
-                        // creating the behaviorInstance above is resetting its frame to the bindings that were present
-                        // when the behavior was defined. Here, we extend those bindings with one for *actor*.
-                        Var.pushThreadBindings(bindings);
-
-                        behaviorInstance.applyTo(message.args);
-                    } catch (AbortEx e) {
-                        throw e;
-                        // Below, catch everything except AbortEx
-                    } catch (Throwable e) {
-                        // TODO: graceful error handling. See error handling in Agent for a better solution.
-                        System.out.println("uncaught exception in actor: " + e.getMessage());
-                    }
-
-                    abortIfDependencyAborted();
-
-                    dependency = null;
-                    for (Actor actor : spawned) {
-                        Actor.start(actor);
-                    }
-                } catch (AbortEx e) {
-                    behavior = oldBehavior;
-                } finally {
-                    dependency = null;
-                    oldBehavior = null;
-                    spawned.clear();
+                // If message has a dependency, this is a tentative turn
+                if (message.dependency != null) {
+                    dependency = message.dependency;
+                    oldBehavior = behavior;
                 }
+
+                IFn behaviorInstance = (IFn) behavior.apply();
+
+                AFuture rootFuture = AFuture.createRootFuture();
+                // Bind *actor* to this
+                // Note: because behavior is encapsulated in a binding-conveyor,
+                // when behaviorInstance is created above, it will reset its
+                // frame to the bindings that were present when the behavior was
+                // defined. Here, we extend those bindings with one for *actor*.
+                Var.pushThreadBindings(bindings);
+
+                behaviorInstance.applyTo(message.args);
+
+                rootFuture.mergeChildren();
+                abortIfDependencyAborted();
+
+                dependency = null;
+                for (Actor actor : spawned) {
+                    Actor.start(actor);
+                }
+            } catch (AbortEx e) {
+                behavior = oldBehavior;
+            } catch (Throwable e) {
+                // TODO: graceful error handling. See error handling in Agent
+                // for a better solution.
+                System.out.println("Uncaught exception in actor:");
+                e.printStackTrace();
+            } finally {
+                dependency = null;
+                oldBehavior = null;
+                spawned.clear();
+                Var.popThreadBindings();
+                AFuture.destructRootFuture();
             }
-    } catch (InterruptedException ex) {
-            // interrupt thread
-    } finally {
-            Var.popThreadBindings();
         }
     }
 

@@ -10,13 +10,9 @@
 
 package clojure.lang;
 
-import java.util.*;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.CountDownLatch;
 
 @SuppressWarnings({"SynchronizeOnNonFinalField"})
 public class LockingTransaction {
@@ -88,23 +84,14 @@ public class LockingTransaction {
     // Transaction info. Can be read by other transactions.
     Info info;
     // Time point at which transaction was first started.
-    long startPoint;
+    private long startPoint;
     // Time at which transaction first started.
-    long startTime;
+    private long startTime;
     // Time point at which current attempt of transaction started.
     long readPoint;
-    // Futures created in transaction.
-    // Access should be protected using synchronized.
-    final Set<TransactionalFuture> futures = Collections.synchronizedSet(
-            new HashSet<TransactionalFuture>());
+    // Transactional context in root future
+    private TransactionalContext root;
 
-
-    // Get number of futures, synchronized.
-    int numberOfFutures() {
-        synchronized (futures) {
-            return futures.size();
-        }
-    }
 
     // Indicate transaction as having stopped (with certain state).
     // OK to call twice (idempotent).
@@ -118,59 +105,34 @@ public class LockingTransaction {
             }
             info = null;
             // From now on, isNotKilled returns false and all operations on refs
-            // (in TransactionalFuture) will throw StoppedEx
+            // (in AFuture) will throw StoppedEx
         }
-        int n_stopped = 0;
-        while (n_stopped != numberOfFutures()) {
-            Set<TransactionalFuture> fs;
-            synchronized (futures) {
-                fs = new HashSet<TransactionalFuture>(futures);
-            }
-            for (TransactionalFuture f_ : fs) {
-                f_.stop(status);
-            }
-            for (TransactionalFuture f_ : fs) {
-                try {
-                    f_.get();
-                    // Should stop 'soon' with ExecutionException wrapping
-                    // StoppedEx
-                } catch (Exception e) {
-                }
-            }
-            n_stopped = fs.size();
-        }
-        // If in the mean time new futures were created, stop them as well.
-        // No race conditions because 1) get and stop are idempotent; 2) futures
-        // only grows, never shrinks; 3) after all gets have returned, futures
-        // won't change anymore.
-        synchronized (futures) {
-            futures.clear();
-        }
+        root.stop(status);
     }
 
     boolean isNotKilled() {
         return info != null && info.running();
     }
 
-    // Returns true if we're in a transaction. Note that they transaction may
+    // Returns true if we're in a transaction. Note that the transaction may
     // have been killed, so it is not necessarily running. This function is only
     // provided for compatibility with existing Clojure, which uses it in the
     // definition of io!. Don't use it because its name is confusing; use
-    // TransactionalFuture.isCurrent() instead.
+    // AFuture.inTransaction() instead.
     public static boolean isRunning() {
-        return TransactionalFuture.isCurrent();
+        return AFuture.inTransaction();
     }
 
-    // Get the transaction we're in. Note that they transaction may
+    // Get the transaction we're in. Note that the transaction may
     // have been killed, so it is not necessarily running. This function is only
     // provided for compatibility with existing Clojure, which uses it in
     // clojure.lang.Agent/dispatchAction. Don't use it because its name is
-    // confusing; use TransactionalFuture.getCurrent() instead.
+    // confusing; use AFuture.getContext() instead.
     public static LockingTransaction getRunning() {
-        TransactionalFuture current = TransactionalFuture.getCurrent();
-        if (current == null)
+        TransactionalContext ctx = AFuture.getContext();
+        if (ctx == null)
             return null;
-        return current.tx;
+        return ctx.tx;
     }
 
     // Try to "barge" the other transaction: if this transaction is older, and
@@ -214,19 +176,20 @@ public class LockingTransaction {
 
     // Run fn in a transaction.
     // If we're already in a transaction, use that one, else creates one.
+    // TODO: move this?
     static public Object runInTransaction(Callable fn) throws Exception {
-        TransactionalFuture f = TransactionalFuture.getCurrent();
-        if (f == null) { // No transaction running: create one
+        TransactionalContext ctx = AFuture.getContext();
+        if (ctx == null) { // No transaction running: create one
             LockingTransaction t = new LockingTransaction();
             return t.run(fn);
         } else { // Transaction exists
-            if (f.tx.info != null) { // Transaction in transaction: simply call fn
+            if (ctx.tx.info != null) { // Transaction in transaction: simply call fn
                 return fn.call();
             } else { // XXX I'm not sure when this happens?
                 // XXX This might actually be incorrect: what if a transaction
                 // is stopped (through barging) right before an inner dosync
                 // gets called?
-                return f.tx.run(fn);
+                return ctx.tx.run(fn);
             }
         }
     }
@@ -235,7 +198,6 @@ public class LockingTransaction {
     Object run(Callable fn) throws Exception {
         boolean committed = false;
         Object result = null;
-
         for (int i = 0; !committed && i < RETRY_LIMIT; i++) {
             readPoint = lastPoint.incrementAndGet();
             if (i == 0) {
@@ -244,11 +206,19 @@ public class LockingTransaction {
             }
             info = new Info(RUNNING, startPoint);
 
-            TransactionalFuture f_main = null;
+            AFuture rootFuture = AFuture.getCurrent();
+            boolean emptyRootFuture = (rootFuture == null);
             boolean finished = false;
             try {
-                f_main = new TransactionalFuture(this, null, fn);
-                result = f_main.callAndWait();
+                if (emptyRootFuture)
+                    rootFuture = AFuture.createRootFuture();
+                rootFuture.enterTransaction(this);
+                root = AFuture.getContext();
+                result = fn.call();
+                // Wait for all futures forked during the transaction to finish
+                // This is safe to do in this thread, as the current future's
+                // body has finished, so all children have been spawned.
+                root.mergeChildren();
                 Actor.abortIfDependencyAborted();
                 finished = true;
             } catch (StoppedEx ex) {
@@ -272,11 +242,15 @@ public class LockingTransaction {
                     throw ex; // throw original ExecutionException, not cause
                 }
             } finally {
+                rootFuture.exitTransaction();
                 if (!finished) {
                     stop(RETRY);
                 } else {
-                    committed = f_main.commit(this);
+                    committed = root.commit(this);
                 }
+                root = null;
+                if (emptyRootFuture)
+                    AFuture.destructRootFuture();
             }
         }
         if (!committed)
@@ -288,7 +262,7 @@ public class LockingTransaction {
     // This is provided for compatibility with Clojure: it is called in
     // clojure.lang.Agent/dispatchAction.
     void enqueue(Agent.Action action) {
-        TransactionalFuture.getEx().enqueue(action);
+        AFuture.getContextEx().enqueue(action);
     }
 
 }

@@ -232,27 +232,26 @@ public class Ref extends ARef implements IFn, Comparable<Ref>, IRef {
     }
 
     public Object deref() {
-        TransactionalFuture f = TransactionalFuture.getCurrent();
-        if (f == null)
+        if (!AFuture.inTransaction())
             return currentVal();
-        return f.doGet(this);
+        return AFuture.getContextEx().doGet(this);
     }
 
     public Object set(Object val) {
-        return TransactionalFuture.getEx().doSet(this, val);
+        return AFuture.getContextEx().doSet(this, val);
     }
 
     public Object commute(IFn fn, ISeq args) {
-        return TransactionalFuture.getEx().doCommute(this, fn, args);
+        return AFuture.getContextEx().doCommute(this, fn, args);
     }
 
     public Object alter(IFn fn, ISeq args) {
-        TransactionalFuture f = TransactionalFuture.getEx();
-        return f.doSet(this, fn.applyTo(RT.cons(f.doGet(this), args)));
+        TransactionalContext ctx = AFuture.getContextEx();
+        return ctx.doSet(this, fn.applyTo(RT.cons(ctx.doGet(this), args)));
     }
 
     public void touch() {
-        TransactionalFuture.getEx().doEnsure(this);
+        AFuture.getContextEx().doEnsure(this);
     }
 
     // Does the ref have a value?

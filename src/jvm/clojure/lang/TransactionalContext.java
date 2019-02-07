@@ -11,9 +11,10 @@
 package clojure.lang;
 
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
-public class TransactionalFuture implements Callable, Future {
+public class TransactionalContext {
 
     // Commute function
     static class CFn {
@@ -26,23 +27,20 @@ public class TransactionalFuture implements Callable, Future {
         }
     }
 
+    // Notify watches
+    private static class Notify {
+        final public Ref ref;
+        final public Object oldval;
+        final public Object newval;
 
-    // Future running in current thread (can be null)
-    final static ThreadLocal<TransactionalFuture> future = new ThreadLocal<TransactionalFuture>();
+        Notify(Ref ref, Object oldval, Object newval) {
+            this.ref = ref;
+            this.oldval = oldval;
+            this.newval = newval;
+        }
+    }
 
-
-    // Transaction for this future
-    final LockingTransaction tx;
-
-    // Java Future executing this future.
-    // null if executing in main thread.
-    Future fut = null;
-
-    // Function executed in this future
-    final Callable fn;
-    // Result of future (return value of fn)
-    Object result;
-
+    // Tree of vals
     static class Vals<K, V> {
         final Map<K, V> vals = new HashMap<K, V>();
         final Vals<K, V> prev;
@@ -69,11 +67,13 @@ public class TransactionalFuture implements Callable, Future {
             return vals.isEmpty();
         }
 
-        public void clear() { // XXX
+        public void clear() {
             this.vals.clear();
-            //this.prev = null; // XXX is this ok?
         }
     }
+
+    // Associated transaction
+    final LockingTransaction tx;
 
     // In transaction values of refs (written by set or commute)
     // The keys of this map and its prev's = union of sets and commutes.
@@ -93,194 +93,36 @@ public class TransactionalFuture implements Callable, Future {
     Actor.Behavior nextBehavior = null;
     // Agent sends
     final List<Agent.Action> actions = new ArrayList<Agent.Action>();
-    // Futures, merged into this one
-    final Set<TransactionalFuture> merged = new HashSet<TransactionalFuture>();
+    // Forked futures
+    final Set<Future> children = new HashSet<>();
+    // Futures (actually their contexts), merged into this one
+    final Set<TransactionalContext> merged = new HashSet<>();
 
-
-    TransactionalFuture(LockingTransaction tx, TransactionalFuture parent,
-        Callable fn) {
+    // Create a root transactional context.
+    TransactionalContext(LockingTransaction tx) {
         this.tx = tx;
-        this.fn = fn;
+        this.snapshot = null;
+        this.vals = new Vals<Ref, Object>();
+    }
 
+    // Create a child transactional context.
+    TransactionalContext(TransactionalContext parent) {
+        this.tx = parent.tx;
         // Initialize vals to parent vals
-        if (parent != null) {
-            if (!parent.vals.isEmpty()) {
-                snapshot = parent.vals;
-                vals = new Vals<Ref, Object>(parent.vals);
-                parent.vals = new Vals<Ref, Object>(parent.vals);
-            } else {
-                // Optimization: if parent has not set anything, this can point
-                // straight to the parent's ancestor, and parent can "re-use"
-                // his vals. This way we avoid creating empty vals.
-                snapshot = parent.vals.prev;
-                vals = new Vals<Ref, Object>(parent.vals.prev);
-            }
+        if (!parent.vals.isEmpty()) {
+            snapshot = parent.vals;
+            vals = new Vals<Ref, Object>(parent.vals);
+            parent.vals = new Vals<Ref, Object>(parent.vals);
         } else {
-            snapshot = null;
-            vals = new Vals<Ref, Object>();
-        }
-
-        synchronized (tx.futures) {
-            tx.futures.add(this);
-        }
-    }
-
-
-    // Is this thread in a transactional future?
-    static public boolean isCurrent() {
-        return getCurrent() != null;
-    }
-
-    // Get this thread's future (possibly null).
-    static TransactionalFuture getCurrent() {
-        return future.get();
-    }
-
-    // Get this thread's future. Throws exception if no future/transaction is
-    // running in the current thread.
-    static TransactionalFuture getEx() {
-        TransactionalFuture f = future.get();
-        if (f == null) {
-            throw new IllegalStateException("No transaction running");
-        }
-        return f;
-    }
-
-
-    // Execute future (in this thread).
-    public Object call() throws Exception {
-        if(!tx.isNotKilled())
-            throw new LockingTransaction.StoppedEx();
-
-        TransactionalFuture f = future.get();
-        if (f != null)
-            throw new IllegalStateException("Already in a future");
-
-        try {
-            future.set(this);
-            result = fn.call();
-        } finally {
-            future.remove();
-        }
-        return result;
-    }
-
-    // Execute future (in this thread), and wait for all sub-futures to finish.
-    // This will throw an ExecutionException if an inner future threw an
-    // exception (including StoppedEx or RetryEx).
-    public Object callAndWait() throws Exception {
-        if(!tx.isNotKilled())
-            throw new LockingTransaction.StoppedEx();
-
-        TransactionalFuture f = future.get();
-        if (f != null)
-            throw new IllegalStateException("Already in a future");
-
-        try {
-            future.set(this);
-            result = fn.call();
-
-            // Wait for all futures to finish
-            int n_stopped = 0;
-            while (n_stopped != tx.numberOfFutures()) {
-                Set<TransactionalFuture> fs;
-                synchronized (tx.futures) {
-                    fs = new HashSet<TransactionalFuture>(tx.futures);
-                }
-                for (TransactionalFuture f_ : fs) {
-                    if (f_ != this) // Don't merge into self
-                        f_.get();
-                }
-                n_stopped = fs.size();
-            }
-            // If in the mean time new futures were created, wait for them
-            // as well. No race condition because number of futures won't
-            // change for sure after last get, and only increases.
-        } finally {
-            future.remove();
-        }
-        return result;
-    }
-
-    // Execute future in another thread.
-    public void spawn() {
-        fut = Agent.soloExecutor.submit(this);
-    }
-
-    // Spawn future: outside transaction regular future, in transactional a
-    // transactional future.
-    static public Future spawnFuture(Callable fn) {
-        TransactionalFuture current = TransactionalFuture.getCurrent();
-        if (current == null) { // outside transaction
-            return Agent.soloExecutor.submit(fn);
-        } else { // inside transaction
-            if (!current.tx.isNotKilled())
-                throw new LockingTransaction.StoppedEx();
-            TransactionalFuture f = new TransactionalFuture(current.tx, current,
-                fn);
-            f.spawn();
-            return f;
+            // Optimization: if parent has not set anything, this can point
+            // straight to the parent's ancestor, and parent can "re-use"
+            // his vals. This way we avoid creating empty vals.
+            snapshot = parent.vals.prev;
+            vals = new Vals<Ref, Object>(parent.vals.prev);
         }
     }
 
-
-    // Attempts to cancel execution of this task.
-    public boolean cancel(boolean mayInterruptIfRunning) {
-        if (fut != null)
-            return fut.cancel(mayInterruptIfRunning);
-        else
-            return false;
-    }
-
-    // Waits if necessary for the computation to complete, and then retrieves
-    // its result.
-    // Should only be called in another future.
-    // Throws ExecutionException if an exception occurred in the future. (This
-    // might be a RetryEx or a StoppedEx!)
-    public Object get() throws ExecutionException, InterruptedException {
-        // Note: in future_a, we call future_b.get()
-        // => this = future_b; current = future_a
-        TransactionalFuture current = TransactionalFuture.getEx();
-
-        // Wait for other thread to finish
-        if (fut != null)
-            fut.get(); // sets result
-        // else: result set by call() directly
-
-        // Merge into current
-        current.merge(this);
-
-        return result;
-    }
-
-    // Waits if necessary for at most the given time for the computation to
-    // complete, and then retrieves its result, if available.
-    public Object get(long timeout, TimeUnit unit) throws InterruptedException,
-    ExecutionException, TimeoutException {
-        if (fut != null)
-            return fut.get(timeout, unit);
-        else
-            return result;
-    }
-
-    // Returns true if this task was cancelled before it completed normally.
-    public boolean isCancelled() {
-        if (fut != null)
-            return fut.isCancelled();
-        else
-            return false;
-    }
-
-    // Returns true if this task completed.
-    public boolean isDone() {
-        if (fut != null)
-            return fut.isCancelled();
-        else
-            return result != null; // XXX could also mean the result was actually null?
-    }
-
-
-    // Indicate future as having stopped (with certain transaction state).
+    // Indicate transaction as having stopped (with certain transaction state).
     // OK to call twice (idempotent).
     void stop(int status) {
         vals.clear();
@@ -290,12 +132,13 @@ public class TransactionalFuture implements Callable, Future {
             r.unlockRead();
         }
         ensures.clear();
+        // TODO maybe force children to stop if they're still running
         try {
             if (status == LockingTransaction.COMMITTED) {
                 for (Agent.Action action : actions) {
                     Agent.dispatchAction(action);
-                    // By now, TransactionFuture.future.get() is null, so
-                    // dispatches happen immediately
+                    // By now, transactional context is null, so dispatches
+                    // happen immediately
                 }
                 for (Actor actor : spawned) {
                     Actor.start(actor); // TODO: doesn't actually start them, just adds them to the turn's list
@@ -441,8 +284,8 @@ public class TransactionalFuture implements Callable, Future {
         nextBehavior = behavior;
     }
 
-    // Merge other future into current one
-    void merge(TransactionalFuture child) {
+    // Merge other context into current one
+    void merge(TransactionalContext child) {
         if (merged.contains(child))
             return;
 
@@ -502,16 +345,10 @@ public class TransactionalFuture implements Callable, Future {
         merged.add(child);
     }
 
-    // Notify watches
-    private static class Notify {
-        final public Ref ref;
-        final public Object oldval;
-        final public Object newval;
-
-        Notify(Ref ref, Object oldval, Object newval) {
-            this.ref = ref;
-            this.oldval = oldval;
-            this.newval = newval;
+    // Merge all children.
+    void mergeChildren() throws ExecutionException, InterruptedException {
+        for (Future future : children) {
+            future.get();
         }
     }
 

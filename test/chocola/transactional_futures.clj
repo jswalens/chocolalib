@@ -5,7 +5,7 @@
 ; === SIMPLE ===
 
 (deftest seq-alter
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (is (= 0 @r1))
@@ -24,7 +24,7 @@
       (is (= 3 (deref r1))))))
 
 (deftest concurrent-alter
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (alter r1 inc)
@@ -35,7 +35,7 @@
       (is (= 1011 (deref r1))))))
 
 (deftest concurrent-alter-1
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (alter r1 inc)
@@ -47,7 +47,7 @@
       (is (= 21 (deref r1))))))
 
 (deftest concurrent-alter-2
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (alter r1 inc)
@@ -59,7 +59,7 @@
 
 (comment
 (deftest concurrent-commute-after-alter
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (alter r1 inc)
@@ -76,7 +76,7 @@
   )
 
 (deftest concurrent-commute
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (commute r1 inc)
@@ -87,7 +87,7 @@
       (is (= 2031 (deref r1))))))
 
 (deftest concurrent-commute-1
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (commute r1 inc)
@@ -98,7 +98,7 @@
       (is (= 31 (deref r1))))))
 
 (deftest concurrent-commute-2
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (commute r1 inc)
@@ -117,7 +117,7 @@
       (is (= 10 (deref r1))))))
 
 (deftest concurrent-set-no-conflict
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)
           r2 (ref 1)]
       (dosync
@@ -128,7 +128,7 @@
       (is (= 21 (deref r2))))))
 
 (deftest concurrent-set-conflict-nondet
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)
           r2 (ref 1)]
       (dosync
@@ -141,7 +141,7 @@
       (is (= 20 (deref r2))))))
 
 (deftest no-deref
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 0)]
       (dosync
         (future (Thread/sleep 10) (ref-set r1 1)))
@@ -150,14 +150,14 @@
 ; === STRUCTURED ===
 
 (deftest none
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10))
       (is (= 11 (deref r1))))))
 
 (deftest one-rr
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
@@ -169,7 +169,7 @@
       (is (= 11 (deref r1))))))
 
 (deftest one-rw
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
@@ -182,7 +182,7 @@
       (is (= 21 (deref r1))))))
 
 (deftest one-wr
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
@@ -195,7 +195,7 @@
       (is (= 21 (deref r1))))))
 
 (deftest one-ww
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
@@ -209,7 +209,7 @@
       (is (= 21 (deref r1))))))
 
 (deftest two-depth-nested
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
@@ -230,7 +230,7 @@
       (is (= 41 (deref r1))))))
 
 (deftest two-breadth-separate
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
@@ -249,7 +249,7 @@
       (is (= 41 (deref r1))))))
 
 (deftest two-breadth-co-deref
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
@@ -272,7 +272,7 @@
       (is (= 31 (deref r1))))))
 
 (deftest three-breadth-two-co-deref-no-conflicts
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
@@ -297,7 +297,7 @@
       (is (= 31 (deref r1))))))
 
 (deftest three-breadth-two-co-deref-conflicts
-  (dotimes [i 50]
+  (dotimes [i 40]
     (let [r1 (ref 1)]
       (dosync
         (alter r1 + 10)
