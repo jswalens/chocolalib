@@ -27,13 +27,15 @@ This library version of Chocola is still a work in progress. Some things we stil
 We published about Chocola at the following academic conferences:
 
 * [Transactional Tasks: Parallelism in Software Transactions][ecoop] (ECOOP, July 2016)
-* [Transactional Actors: Communication in Transactions][seps] (SEPS, SPLASH, October 2017)
+* [Transactional Actors: Communication in Transactions][seps] (SEPS at SPLASH, October 2017)
+* [Chocola: Integrating Futures, Actors, and Transactions][agere] (AGERE at SPLASH, November 2018)
 
 ## License
 
-Copyright © 2018 Janwillem Swalens, Software Languages Lab, Vrije Universiteit Brussel. Distributed under the Eclipse Public License, included in the file `LICENSE`.
+Copyright © 2018–2019 Janwillem Swalens, Software Languages Lab, Vrije Universiteit Brussel. Distributed under the Eclipse Public License, included in the file `LICENSE`.
 
 
 
 [ecoop]: http://soft.vub.ac.be/~jswalens/ecoop2016.pdf
 [seps]: http://soft.vub.ac.be/~jswalens/seps2017.pdf
+[agere]: http://soft.vub.ac.be/~jswalens/agere2018.pdf
