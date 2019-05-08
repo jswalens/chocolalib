@@ -1,5 +1,7 @@
 # Chocola – composable concurrency
 
+![Chocola](http://soft.vub.ac.be/~jswalens/chocola/cookie-100.png)
+
 Chocola is a Clojure library for concurrent and parallel programming. It provides futures, transactions, and actors. It is unique in ensuring that these three models work correctly even when they are combined.
 
 More at http://soft.vub.ac.be/~jswalens/chocola
