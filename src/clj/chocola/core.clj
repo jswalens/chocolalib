@@ -1,4 +1,5 @@
-(ns chocola.core)
+(ns chocola.core
+  (:require [clojure.core.match :refer [match]]))
 
 ; Make these private functions from clojure.core available here
 (def deref-future #'clojure.core/deref-future)
@@ -31,11 +32,32 @@
 
   (apply (first args) state-of-agent (rest args))")
 
+(defn patterns->match-clauses [patterns]
+  "Convert patterns as given in behavior definition into clauses as expected by
+  clojure.core.match/match."
+  (->> patterns
+    ; ([:ping] ping [:pong] pong)
+    (partition 2)
+    ; (([:ping] ping) ([:pong] pong))
+    (map (fn [[pattern action]] [[(list pattern :seq)] action]))
+    ; ([[([:ping] :seq)] ping] [[([:pong] :seq)] pong])
+    (apply concat))) ; flatten one level
+    ; ([([:ping] :seq)] ping [([:pong] :seq)] pong)
+    ; Therefore, splicing this results in:
+    ; [([:ping] :seq)] ping
+    ; [([:pong] :seq)] pong
+
 (alter-var-root #'clojure.core/behavior
   (fn [_original]
-    (fn [&form &env behavior-pars message-pars & body]
-      `(binding-conveyor-fn
-        (fn ~behavior-pars (fn ~message-pars ~@body))))))
+    (fn [&form &env behavior-pars & body]
+      (let [match-clauses (patterns->match-clauses body)]
+        `(binding-conveyor-fn
+          (fn ~behavior-pars
+            (fn [& message-pars#]
+              (match [message-pars#]
+                ~@match-clauses
+                :else (println "error: message" message-pars#
+                        "does not match any pattern")))))))))
 
 (alter-meta! #'clojure.core/behavior assoc :macro true)
 (alter-meta! #'clojure.core/behavior assoc :added "1.0-chocola")
