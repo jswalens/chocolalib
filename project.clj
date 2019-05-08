@@ -1,4 +1,4 @@
-(defproject chocola "0.1.0-SNAPSHOT"
+(defproject chocola "1.1.1"
   :description "A unified framework of futures, transactions, and actors."
   :url "http://soft.vub.ac.be/~jswalens/chocola/"
   :license {:name "Eclipse Public License"
