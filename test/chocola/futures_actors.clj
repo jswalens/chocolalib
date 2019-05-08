@@ -9,16 +9,21 @@
         received-is (atom [])
         done?       (promise)
         receiver-beh
-          (behavior [] [i]
-            ;(println "Got" i)
-            (swap! received-is conj i)
-            (if (= i (- n-msgs 1))
-              (deliver done? true)))
+          (behavior []
+            [i]
+            (do
+              ;(println "Got" i)
+              (swap! received-is conj i)
+              (if (= i (- n-msgs 1))
+                (deliver done? true))))
         receiver
           (spawn receiver-beh)
         sender-beh
-          (behavior [] [i]
-            (future (Thread/sleep (rand-int 200)) (send receiver i)))
+          (behavior []
+            [i]
+            (future
+              (Thread/sleep (rand-int 200))
+              (send receiver i)))
         sender
           (spawn sender-beh)]
     (dotimes [i n-msgs]

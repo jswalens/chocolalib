@@ -27,26 +27,22 @@
   (testing "COUNTER - WORKS AS EXPECTED"
     (let [sum (ref 0)
           counter
-          (behavior
-            [i]
-            [msg & args]
-            (case msg
-              :get
+          (behavior [i]
+            [:get p]
               (do
                 (dosync
                   (log "my sum:" i "- total sum:" @sum))
-                (deliver (first args) i))
-              :inc
+                (deliver p i))
+            [:inc]
               (dosync
                 (log "my sum:" i "+ 1 - total sum:" @sum "+ 1")
                 (alter sum + 1)
                 (become :same (+ i 1)))
-              :add
-              (let [j (first args)]
-                (dosync
-                  (log "my sum:" i "+" j "- total sum:" @sum "+" j)
-                  (alter sum + j)
-                  (become :same (+ i j))))))
+            [:add j]
+              (dosync
+                (log "my sum:" i "+" j "- total sum:" @sum "+" j)
+                (alter sum + j)
+                (become :same (+ i j))))
           counter1 (spawn counter 0)
           counter2 (spawn counter 0)]
       (send counter1 :inc)
@@ -67,24 +63,21 @@
     (let [n 100
           contentious-ref (ref 0)
           counter
-          (behavior
-            [i]
-            [msg & args]
-            (case msg
-              :get
-              (deliver (first args) i)
-              :inc
-              (become :same (inc i))))
+          (behavior [i]
+            [:get p]
+              (deliver p i)
+            [:inc]
+              (become :same (inc i)))
           counter-actor (spawn counter 0)
           sender
-          (behavior
-            []
+          (behavior []
             [p]
-            (dosync
-              (send counter-actor :inc)
-              (alter contentious-ref inc))
-            ; only deliver after transaction committed
-            (deliver p true))
+            (do
+              (dosync
+                (send counter-actor :inc)
+                (alter contentious-ref inc))
+              ; only deliver after transaction committed
+              (deliver p true)))
           senders (doall (repeatedly n #(spawn sender)))
           promises (repeatedly n promise)]
       (send-promises-and-wait senders)
@@ -99,20 +92,16 @@
           sum (ref 0)
           contentious-ref (ref 0)
           counter
-          (behavior
-            [i]
-            [msg & args]
-            (case msg
-              :get
-              (deliver (first args) i)
-              :inc
+          (behavior [i]
+            [:get p]
+              (deliver p i)
+            [:inc]
               (dosync
                 (log "my sum:" i "+ 1 - total sum:" @sum "+ 1")
                 (alter sum + 1)
-                (become :same (+ i 1)))))
+                (become :same (+ i 1))))
           spawner
-          (behavior
-            []
+          (behavior []
             [p]
             (let [c (dosync
                       (let [c (spawn counter 0)]
@@ -137,18 +126,15 @@
     (let [total 100
           one-flag-set? (ref false)
           flagger
-          (behavior
-            [flag]
-            [msg & args]
-            (case msg
-              :set-flag
+          (behavior [flag]
+            [:set-flag]
               (dosync
                 (when-not @one-flag-set?
                   (become :same true)
                   (ref-set one-flag-set? true)))
               ; else: flag stays false, one-flag-set? stays true
-              :read-flag
-              (deliver (first args) flag)))
+            [:read-flag p]
+              (deliver p flag))
           flaggers (doall (repeatedly total #(spawn flagger false)))]
       (doseq [f flaggers]
         (send f :set-flag))
@@ -174,21 +160,18 @@
   "Send from transaction. Receiver contains no transaction."
   (let [n 100
         n-send (ref 0)                                      ; contentious
-        sender (behavior
-                 [rcv]
+        sender (behavior [rcv]
                  [p]
-                 (dosync
-                   (send rcv :inc)
-                   (alter n-send inc))
-                 (deliver p true))
-        receiver (behavior
-                   [i]
-                   [msg & args]
-                   (case msg
-                     :inc
+                 (do
+                   (dosync
+                     (send rcv :inc)
+                     (alter n-send inc))
+                   (deliver p true)))
+        receiver (behavior [i]
+                   [:inc]
                      (become :same (inc i))
-                     :get
-                     (deliver (first args) i)))
+                   [:get p]
+                     (deliver p i))
         receivers (doall (repeatedly n #(spawn receiver 0)))
         senders (doall (map #(spawn sender %) receivers))]
     (send-promises-and-wait senders)
@@ -201,18 +184,17 @@
   (let [n 100
         n-send (ref 0)                                      ; contentious
         n-receive (ref 0)                                   ; contentious
-        sender (behavior
-                 [rcv]
+        sender (behavior [rcv]
                  [p]
                  (dosync
                    (send rcv :inc p)
                    (alter n-send inc)))
-        receiver (behavior
-                   []
-                   [msg p]
-                   (dosync
-                     (alter n-receive inc))
-                   (deliver p true))
+        receiver (behavior []
+                   [:inc p]
+                   (do
+                     (dosync
+                       (alter n-receive inc))
+                     (deliver p true)))
         receivers (doall (repeatedly n #(spawn receiver)))
         senders (doall (map #(spawn sender %) receivers))]
     (send-promises-and-wait senders)
@@ -224,20 +206,19 @@
   (let [n 100
         n-send (ref 0)                                      ; contentious
         n-receive (ref 0)                                   ; contentious
-        sender (behavior
-                 [rcv]
+        sender (behavior [rcv]
                  [p]
                  (dosync
                    (send rcv :inc p)
                    (alter n-send inc)))
-        receiver (behavior
-                   []
-                   [msg p]
-                   (dosync
-                     (alter n-receive inc))
-                   (dosync
-                     (alter n-receive inc))
-                   (deliver p true))
+        receiver (behavior []
+                   [:inc p]
+                   (do
+                     (dosync
+                       (alter n-receive inc))
+                     (dosync
+                       (alter n-receive inc))
+                     (deliver p true)))
         receivers (doall (repeatedly n #(spawn receiver)))
         senders (doall (map #(spawn sender %) receivers))]
     (send-promises-and-wait senders)
@@ -248,27 +229,24 @@
   "Send from and outside transaction. Receiver contains no transaction."
   (let [n 100
         n-send (ref 0)                                      ; contentious
-        sender (behavior
-                 [rcv]
+        sender (behavior [rcv]
                  [p]
-                 (send rcv :inc)
-                 (dosync
+                 (do
                    (send rcv :inc)
-                   (alter n-send inc))
-                 (send rcv :inc)
-                 (dosync
+                   (dosync
+                     (send rcv :inc)
+                     (alter n-send inc))
                    (send rcv :inc)
-                   (alter n-send inc))
-                 (send rcv :inc)
-                 (deliver p true))
-        receiver (behavior
-                   [i]
-                   [msg & args]
-                   (case msg
-                     :inc
+                   (dosync
+                     (send rcv :inc)
+                     (alter n-send inc))
+                   (send rcv :inc)
+                   (deliver p true)))
+        receiver (behavior [i]
+                   [:inc]
                      (become :same (inc i))
-                     :get
-                     (deliver (first args) i)))
+                   [:get p]
+                     (deliver p i))
         receivers (doall (repeatedly n #(spawn receiver 0)))
         senders (doall (map #(spawn sender %) receivers))]
     (send-promises-and-wait senders)
@@ -282,32 +260,27 @@
         n-first (ref 0)                                     ; contentious
         n-second (ref 0)                                    ; contentious
         n-third (ref 0)                                     ; contentious
-        first_ (behavior
-                 [i second]
+        first_ (behavior [i second]
                  [p]
                  (dosync
                    (send second :inc p)
                    (alter n-first inc)
                    (become :same (inc i) second)))
-        second (behavior
-                 [i third]
-                 [msg p]
+        second (behavior [i third]
+                 [:inc p]
                  (dosync
                    (send third :inc p)
                    (alter n-second inc)
                    (become :same (inc i) third)))
-        third (behavior
-                [i]
-                [msg & args]
-                (case msg
-                  :inc
+        third (behavior [i]
+                [:inc p]
                   (do
                     (dosync
                       (alter n-third inc)
                       (become :same (inc i)))
-                    (deliver (first args) true))
-                  :get
-                  (deliver (first args) i)))
+                    (deliver p true))
+                [:get p]
+                  (deliver p i))
         thirds (doall (repeatedly n #(spawn third 0)))
         seconds (doall (map #(spawn second 0 %) thirds))
         firsts (doall (map #(spawn first_ 0 %) seconds))]
@@ -324,34 +297,28 @@
         n-first (ref 0)                                     ; contentious
         n-second (ref 0)                                    ; contentious
         n-third (ref 0)                                     ; contentious
-        first_ (behavior
-                 [i second]
+        first_ (behavior [i second]
                  [p]
-                 (dosync
-                   (send second :inc)
-                   (alter n-first inc)
-                   (become :same (inc i) second))
-                 (deliver p true))
-        second (behavior
-                 [i third]
-                 [msg & args]
-                 (case msg
-                   :inc
+                 (do
+                   (dosync
+                     (send second :inc)
+                     (alter n-first inc)
+                     (become :same (inc i) second))
+                   (deliver p true)))
+        second (behavior [i third]
+                 [:inc]
                    (do
                      (send third :inc)
                      (become :same (inc i) third))
-                   :get
-                   (deliver (first args) i)))
-        third (behavior
-                [i]
-                [msg & args]
-                (case msg
-                  :inc
+                 [:get p]
+                   (deliver p i))
+        third (behavior [i]
+                [:inc]
                   (dosync
                     (alter n-third inc)
                     (become :same (inc i)))
-                  :get
-                  (deliver (first args) i)))
+                [:get p]
+                  (deliver p i))
         thirds (doall (repeatedly n #(spawn third 0)))
         seconds (doall (map #(spawn second 0 %) thirds))
         firsts (doall (map #(spawn first_ 0 %) seconds))]

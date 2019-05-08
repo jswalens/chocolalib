@@ -24,13 +24,10 @@
 
 (deftest counter
   (let [counter
-          (behavior
-            [i]
-            [msg & args]
-            (case msg
-              :inc (become :same (+ i 1))
-              :add (become :same (+ i (first args)))
-              :get (deliver (first args) i)))
+          (behavior [i]
+            [:inc]   (become :same (+ i 1))
+            [:add x] (become :same (+ i x))
+            [:get p] (deliver p i))
         test (fn [actor n]
                (let [p (promise)]
                  (send actor :get p)
@@ -58,16 +55,11 @@
     (is (deref p 5000 false))))
 
 (deftest become-test
-  (let [beh2 (behavior
-               []
-               [msg & args]
-               (deliver (first args) 2))
-        beh1 (behavior
-               []
-               [msg & args]
-               (case msg
-                 :deliver (deliver (first args) 1)
-                 :become  (become beh2)))
+  (let [beh2 (behavior []
+               [:deliver p] (deliver p 2))
+        beh1 (behavior []
+               [:deliver p] (deliver p 1)
+               [:become]    (become beh2))
         act (spawn beh1)
         p1  (promise)
         p2  (promise)]
@@ -78,11 +70,10 @@
     (is (= (deref p2 5000 false) 2))))
 
 (deftest star-actor-star-test
-  (let [beh (behavior
-              []
+  (let [beh (behavior []
               [self p]
-              (deliver p (= self *actor*))
-              (become :same))
+              (do (deliver p (= self *actor*))
+                  (become :same)))
         act (spawn beh)
         p1  (promise)
         p2  (promise)]
@@ -94,8 +85,8 @@
 (def ^:dynamic dynamic-var 1)
 
 (defn create-behavior-with-dynamic-var []
-  (behavior [] [p]
-            (deliver p dynamic-var)))
+  (behavior []
+    [p] (deliver p dynamic-var)))
 
 (deftest binding-conveyor-test
   (let [beh1 (create-behavior-with-dynamic-var)]
