@@ -28,24 +28,21 @@
     (let [sum (ref 0)
           counter
           (behavior [i]
-            [msg & args]
-            (case msg ; TODO convert to pattern matching
-              :get
+            [:get p]
               (do
                 (dosync
                   (log "my sum:" i "- total sum:" @sum))
-                (deliver (first args) i))
-              :inc
+                (deliver p i))
+            [:inc]
               (dosync
                 (log "my sum:" i "+ 1 - total sum:" @sum "+ 1")
                 (alter sum + 1)
                 (become :same (+ i 1)))
-              :add
-              (let [j (first args)]
-                (dosync
-                  (log "my sum:" i "+" j "- total sum:" @sum "+" j)
-                  (alter sum + j)
-                  (become :same (+ i j))))))
+            [:add j]
+              (dosync
+                (log "my sum:" i "+" j "- total sum:" @sum "+" j)
+                (alter sum + j)
+                (become :same (+ i j))))
           counter1 (spawn counter 0)
           counter2 (spawn counter 0)]
       (send counter1 :inc)
@@ -67,12 +64,10 @@
           contentious-ref (ref 0)
           counter
           (behavior [i]
-            [msg & args]
-            (case msg ; TODO convert to pattern matching
-              :get
-              (deliver (first args) i)
-              :inc
-              (become :same (inc i))))
+            [:get p]
+              (deliver p i)
+            [:inc]
+              (become :same (inc i)))
           counter-actor (spawn counter 0)
           sender
           (behavior []
@@ -98,15 +93,13 @@
           contentious-ref (ref 0)
           counter
           (behavior [i]
-            [msg & args]
-            (case msg ; TODO convert to pattern matching
-              :get
-              (deliver (first args) i)
-              :inc
+            [:get p]
+              (deliver p i)
+            [:inc]
               (dosync
                 (log "my sum:" i "+ 1 - total sum:" @sum "+ 1")
                 (alter sum + 1)
-                (become :same (+ i 1)))))
+                (become :same (+ i 1))))
           spawner
           (behavior []
             [p]
@@ -134,16 +127,14 @@
           one-flag-set? (ref false)
           flagger
           (behavior [flag]
-            [msg & args]
-            (case msg
-              :set-flag
+            [:set-flag]
               (dosync
                 (when-not @one-flag-set?
                   (become :same true)
                   (ref-set one-flag-set? true)))
               ; else: flag stays false, one-flag-set? stays true
-              :read-flag
-              (deliver (first args) flag)))
+            [:read-flag p]
+              (deliver p flag))
           flaggers (doall (repeatedly total #(spawn flagger false)))]
       (doseq [f flaggers]
         (send f :set-flag))
@@ -177,12 +168,10 @@
                      (alter n-send inc))
                    (deliver p true)))
         receiver (behavior [i]
-                   [msg & args]
-                   (case msg ; TODO convert to pattern matching
-                     :inc
+                   [:inc]
                      (become :same (inc i))
-                     :get
-                     (deliver (first args) i)))
+                   [:get p]
+                     (deliver p i))
         receivers (doall (repeatedly n #(spawn receiver 0)))
         senders (doall (map #(spawn sender %) receivers))]
     (send-promises-and-wait senders)
@@ -201,7 +190,7 @@
                    (send rcv :inc p)
                    (alter n-send inc)))
         receiver (behavior []
-                   [msg p]
+                   [:inc p]
                    (do
                      (dosync
                        (alter n-receive inc))
@@ -223,7 +212,7 @@
                    (send rcv :inc p)
                    (alter n-send inc)))
         receiver (behavior []
-                   [msg p]
+                   [:inc p]
                    (do
                      (dosync
                        (alter n-receive inc))
@@ -254,12 +243,10 @@
                    (send rcv :inc)
                    (deliver p true)))
         receiver (behavior [i]
-                   [msg & args]
-                   (case msg ; TODO convert to pattern matching
-                     :inc
+                   [:inc]
                      (become :same (inc i))
-                     :get
-                     (deliver (first args) i)))
+                   [:get p]
+                     (deliver p i))
         receivers (doall (repeatedly n #(spawn receiver 0)))
         senders (doall (map #(spawn sender %) receivers))]
     (send-promises-and-wait senders)
@@ -280,22 +267,20 @@
                    (alter n-first inc)
                    (become :same (inc i) second)))
         second (behavior [i third]
-                 [msg p]
+                 [:inc p]
                  (dosync
                    (send third :inc p)
                    (alter n-second inc)
                    (become :same (inc i) third)))
         third (behavior [i]
-                [msg & args]
-                (case msg ; TODO convert to pattern matching
-                  :inc
+                [:inc p]
                   (do
                     (dosync
                       (alter n-third inc)
                       (become :same (inc i)))
-                    (deliver (first args) true))
-                  :get
-                  (deliver (first args) i)))
+                    (deliver p true))
+                [:get p]
+                  (deliver p i))
         thirds (doall (repeatedly n #(spawn third 0)))
         seconds (doall (map #(spawn second 0 %) thirds))
         firsts (doall (map #(spawn first_ 0 %) seconds))]
@@ -321,23 +306,19 @@
                      (become :same (inc i) second))
                    (deliver p true)))
         second (behavior [i third]
-                 [msg & args]
-                 (case msg ; TODO convert to pattern matching
-                   :inc
+                 [:inc]
                    (do
                      (send third :inc)
                      (become :same (inc i) third))
-                   :get
-                   (deliver (first args) i)))
+                 [:get p]
+                   (deliver p i))
         third (behavior [i]
-                [msg & args]
-                (case msg ; TODO convert to pattern matching
-                  :inc
+                [:inc]
                   (dosync
                     (alter n-third inc)
                     (become :same (inc i)))
-                  :get
-                  (deliver (first args) i)))
+                [:get p]
+                  (deliver p i))
         thirds (doall (repeatedly n #(spawn third 0)))
         seconds (doall (map #(spawn second 0 %) thirds))
         firsts (doall (map #(spawn first_ 0 %) seconds))]

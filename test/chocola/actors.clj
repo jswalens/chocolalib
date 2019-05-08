@@ -25,11 +25,9 @@
 (deftest counter
   (let [counter
           (behavior [i]
-            [msg & args]
-            (case msg
-              :inc (become :same (+ i 1))
-              :add (become :same (+ i (first args)))
-              :get (deliver (first args) i)))
+            [:inc]   (become :same (+ i 1))
+            [:add x] (become :same (+ i x))
+            [:get p] (deliver p i))
         test (fn [actor n]
                (let [p (promise)]
                  (send actor :get p)
@@ -58,13 +56,10 @@
 
 (deftest become-test
   (let [beh2 (behavior []
-               [msg & args]
-               (deliver (first args) 2))
+               [:deliver p] (deliver p 2))
         beh1 (behavior []
-               [msg & args]
-               (case msg
-                 :deliver (deliver (first args) 1)
-                 :become  (become beh2)))
+               [:deliver p] (deliver p 1)
+               [:become]    (become beh2))
         act (spawn beh1)
         p1  (promise)
         p2  (promise)]
