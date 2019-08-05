@@ -7,7 +7,7 @@
 
 ; ACTORS
 
-(alter-meta! #'*actor* assoc :added "1.0-chocola")
+(alter-meta! #'clojure.core/*actor* assoc :added "1.0-chocola")
 
 (alter-var-root #'clojure.core/send
   (fn [send-original]
