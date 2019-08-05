@@ -8,20 +8,30 @@ More at http://soft.vub.ac.be/~jswalens/chocola
 
 ## Getting started
 
-Chocola can easily be used in existing Clojure projects that use Leiningen. In your project's `project.clj`, add the following line:
+Because this library monkey-patches Clojure, it is a bit complicated to get working: we need to make sure it is loaded before Clojure, i.e. the Chocola jar must appear earlier in the classpath than Clojure. Assuming you use Leiningen, you can follow these steps:
 
+1. In a temporary folder, checkout this repository and create it:
+```sh
+$ git clone https://github.com/jswalens/chocolalib.git
+$ lein uberjar
+```
+This creates the file `target/chocola-2.0.0-standalone.jar`, which contains Clojure 1.8.0, Chocola, and its dependencies (core.match).
+
+2. Copy this file into the `resources` folder of your project. (The folder can have another name too.)
+
+3. Update your project's `project.clj` to add the following lines:
 ```clj
+  :resource-paths ["resources/chocola-2.0.0-standalone.jar"]
   :injections [(require 'chocola.core)]
 ```
-
-This injects the call to include Chocola in your code. Chocola will patch Clojure and modify its internals to use Chocola's semantics.
+The first line will make sure that Chocola and its dependencies are loaded. The second line injects a call to include Chocola in your code, which will patch Clojure and modify its internals to use Chocola's semantics.
 
 ## To do
 
 This library version of Chocola is still a work in progress. Some things we still plan to do:
 
-* [ ] Add more documentation on how to include Chocola. Check whether everything works as expected.
-* [ ] Add documentation on how to use Chocola, what its semantics are...
+* [ ] Check whether getting started always works as expected.
+* [ ] Add documentation on how to use Chocola and its semantics.
 * [ ] Finish a large number of loose ends in the implementation.
 
 ## Publications
