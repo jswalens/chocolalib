@@ -26,21 +26,28 @@ This creates the file `target/chocola-2.0.0-standalone.jar`, which contains Cloj
 ```
 The first line will make sure that Chocola and its dependencies are loaded. The second line injects a call to include Chocola in your code, which will patch Clojure and modify its internals to use Chocola's semantics.
 
-## To do
-
-This library version of Chocola is still a work in progress. Some things we still plan to do:
-
-* [ ] Check whether getting started always works as expected.
-* [ ] Add documentation on how to use Chocola and its semantics.
-* [ ] Finish a large number of loose ends in the implementation.
+Some code examples of Chocola can be found at http://soft.vub.ac.be/~jswalens/chocola.
 
 ## Publications
 
 We published about Chocola at the following academic conferences:
 
+* [Chocola: Integrating Futures, Actors, and Transactions][agere] (AGERE at SPLASH, November 2018)
 * [Transactional Tasks: Parallelism in Software Transactions][ecoop] (ECOOP, July 2016)
 * [Transactional Actors: Communication in Transactions][seps] (SEPS at SPLASH, October 2017)
-* [Chocola: Integrating Futures, Actors, and Transactions][agere] (AGERE at SPLASH, November 2018)
+
+You can find a lot more information in [my PhD thesis](http://soft.vub.ac.be/~jswalens/phd2018.pdf).
+
+## To do
+
+* Documentation:
+    * [ ] Check whether getting started always works as expected
+    * [ ] Add documentation on how to use Chocola and explain its semantics
+* Implementation:
+    * [ ] Garbage collection of unreachable actors (currently, unreachable actors will stay idle forever)
+    * [ ] Interaction with exceptions/errors (seems to mostly work correctly, but exhaustive testing is needed)
+    * [ ] `commute` (doesn't work as expected in transactional futures)
+    * [ ] Performance improvements (see TODOs throughout code)
 
 ## License
 
@@ -51,3 +58,4 @@ Copyright © 2018–2019 Janwillem Swalens, Software Languages Lab, Vrije Univer
 [ecoop]: http://soft.vub.ac.be/~jswalens/ecoop2016.pdf
 [seps]: http://soft.vub.ac.be/~jswalens/seps2017.pdf
 [agere]: http://soft.vub.ac.be/~jswalens/agere2018.pdf
+[phd]: http://soft.vub.ac.be/~jswalens/phd2018.pdf
