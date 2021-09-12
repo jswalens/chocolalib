@@ -1,10 +1,10 @@
-# Chocola – composable concurrency
-
 ![Chocola](http://soft.vub.ac.be/~jswalens/chocola/cookie-100.png)
+
+# Chocola – composable concurrency
 
 Chocola is a Clojure library for concurrent and parallel programming. It provides futures, transactions, and actors. It is unique in ensuring that these three models work correctly even when they are combined.
 
-More at http://soft.vub.ac.be/~jswalens/chocola
+More at https://chocola.jnwllm.be/
 
 ## Getting started
 
@@ -30,8 +30,9 @@ Some code examples of Chocola can be found at http://soft.vub.ac.be/~jswalens/ch
 
 ## Publications
 
-We published about Chocola at the following academic conferences:
+We published about (the ideas behind) Chocola in the following academic papers:
 
+* [Chocola: Composable Concurrency Language][toplas] (TOPLAS, January 2021, [also available here][toplas2])
 * [Chocola: Integrating Futures, Actors, and Transactions][agere] (AGERE at SPLASH, November 2018)
 * [Transactional Tasks: Parallelism in Software Transactions][ecoop] (ECOOP, July 2016)
 * [Transactional Actors: Communication in Transactions][seps] (SEPS at SPLASH, October 2017)
@@ -55,6 +56,8 @@ Copyright © 2018–2019 Janwillem Swalens, Software Languages Lab, Vrije Univer
 
 
 
+[toplas]: https://dl.acm.org/doi/10.1145/3427201
+[toplas2]: https://jnwllm.be/publications/toplas2021.pdf
 [ecoop]: http://soft.vub.ac.be/~jswalens/ecoop2016.pdf
 [seps]: http://soft.vub.ac.be/~jswalens/seps2017.pdf
 [agere]: http://soft.vub.ac.be/~jswalens/agere2018.pdf
