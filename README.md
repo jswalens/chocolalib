@@ -1,32 +1,32 @@
-![Chocola](http://soft.vub.ac.be/~jswalens/chocola/cookie-100.png)
+![Chocola](https://chocola.jnwllm.be/cookie-100.png)
 
 # Chocola – composable concurrency
 
 Chocola is a Clojure library for concurrent and parallel programming. It provides futures, transactions, and actors. It is unique in ensuring that these three models work correctly even when they are combined.
 
-More at https://chocola.jnwllm.be/
+You can find more information and code examples at https://chocola.jnwllm.be/.
 
 ## Getting started
 
 Because this library monkey-patches Clojure, it is a bit complicated to get working: we need to make sure it is loaded before Clojure, i.e. the Chocola jar must appear earlier in the classpath than Clojure. Assuming you use Leiningen, you can follow these steps:
 
-1. In a temporary folder, checkout this repository and create it:
+1. In a temporary folder, checkout this repository and create the 'uberjar':
 ```sh
 $ git clone https://github.com/jswalens/chocolalib.git
 $ lein uberjar
 ```
-This creates the file `target/chocola-2.0.0-standalone.jar`, which contains Clojure 1.8.0, Chocola, and its dependencies (core.match).
+This creates the file `target/chocola-2.0.1-standalone.jar`, which contains Clojure 1.10.1, Chocola, and its dependencies (core.match).
 
 2. Copy this file into the `resources` folder of your project. (The folder can have another name too.)
 
 3. Update your project's `project.clj` to add the following lines:
 ```clj
-  :resource-paths ["resources/chocola-2.0.0-standalone.jar"]
+  :resource-paths ["resources/chocola-2.0.1-standalone.jar"]
   :injections [(require 'chocola.core)]
 ```
 The first line will make sure that Chocola and its dependencies are loaded. The second line injects a call to include Chocola in your code, which will patch Clojure and modify its internals to use Chocola's semantics.
 
-Some code examples of Chocola can be found at http://soft.vub.ac.be/~jswalens/chocola.
+Some code examples of Chocola can be found at https://chocola.jnwllm.be/.
 
 ## Publications
 
@@ -38,6 +38,27 @@ We published about (the ideas behind) Chocola in the following academic papers:
 * [Transactional Actors: Communication in Transactions][seps] (SEPS at SPLASH, October 2017)
 
 You can find a lot more information in [my PhD thesis](http://soft.vub.ac.be/~jswalens/phd2018.pdf).
+
+If you use this software in an academic context, please cite the following paper:
+
+```tex
+@article{10.1145/3427201,
+    author = {Swalens, Janwillem and {De Koster}, Joeri and {De Meuter}, Wolfgang},
+    title = {{Chocola: Composable Concurrency Language}},
+    journal = {ACM Transactions on Programming Languages and Systems},
+    year = {2021},
+    month = jan,
+    volume = {42},
+    number = {4},
+    articleno = {17},
+    numpages = {56},
+    publisher = {Association for Computing Machinery},
+    address = {New York, NY, USA},
+    issn = {0164-0925},
+    doi = {10.1145/3427201},
+    url = {https://doi.org/10.1145/3427201},
+}
+```
 
 ## To do
 
